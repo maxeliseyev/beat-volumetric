@@ -1,4 +1,4 @@
-add_library(beat_leveler_dsp STATIC PassthroughProcessor.cpp)
+add_library(beat_leveler_dsp STATIC PassthroughProcessor.cpp DelayLine.cpp)
 target_include_directories(beat_leveler_dsp PUBLIC "${PROJECT_SOURCE_DIR}/src")
 target_compile_features(beat_leveler_dsp PUBLIC cxx_std_20)
 target_link_libraries(beat_leveler_dsp PRIVATE beat_leveler_warnings)
