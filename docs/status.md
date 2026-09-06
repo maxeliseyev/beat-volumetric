@@ -4,29 +4,46 @@
 
 ## Branch
 
-`main`, репозиторий ещё без коммитов. Remote не настроен.
-Начальное оформление находится в рабочем дереве.
+`feat/build-and-dsp-harness`, от `main` (`1c92b4f`). Remote `origin` настроен.
+Этап 01 реализован и проверен; эта ветка предназначена для его ревью и слияния в `main`.
+Следующий этап вести отдельно в `feat/streaming-contract-and-lookahead`,
+с опорой на этот каркас до слияния PR.
 
 ## Now
 
-- Прочитана исходная идея `drum-leveler-project.md` и локальная архитектура Beat Equalizer.
-- Добавлены README, контракт AGENTS, план реализации и `.gitignore`.
-- Зафиксированы технические вопросы lookahead, потоковой детекции и оконного gain.
-- Исходного кода, сборочной системы, тестов и бинарных артефактов пока нет.
+- C++20/CMake Debug/Release, Makefile, VERSION 0.1.0 и changelog.
+- Автономный `beat_leveler_dsp`: mono/stereo passthrough без latency.
+- Синтетические удары с эталонными onset/peak; WAV runner и CSV измеренного выхода.
+- Catch2-тесты DSP/стенда и интеграционный CLI-прогон без GUI.
+- Детекция, gain law, lookahead и plugin-адаптер ещё не реализованы.
 
 ## Next
 
-PR 01 из [плана](plan.md#порядок-реализации): C++20/CMake-каркас,
-автономная DSP-библиотека, Catch2 и синтетический файловый стенд.
-Далее PR 02 — причинность, потоковый контракт детектора и бюджет latency.
+PR 02 из [плана](plan.md#порядок-реализации): причинность, потоковый контракт
+детектора, delay line и бюджет latency. Файловый стенд должен перейти с
+`PassthroughProcessor` на тот же движок, который затем использует плагин.
+
+## Проверено
+
+- macOS, AppleClang 21.0.0, CMake 4.1.2, Ninja 1.13.1.
+- `rtk proxy make debug`: DSP/Catch2 и интеграционный CLI — 2/2 CTest-прогона.
+- `rtk proxy make all bench`: Release, те же 2/2 прогона и пример WAV/CSV.
+- Отдельная конфигурация с `BUILD_TESTING=OFF`, `BEAT_LEVELER_BUILD_TOOLS=OFF`
+  и `FETCHCONTENT_FULLY_DISCONNECTED=ON` собрала ядро без внешних зависимостей.
+- Повторное чтение float32 WAV сохраняет сэмплы точно; отчёт даёт max_abs_error=0.
+  Результаты одинаковы при фиксированных и меняющихся размерах блока.
+- Проверены ссылки документации, JSON presets и whitespace; аудио и зависимости
+  остаются в игнорируемом `build/`.
+- Реальный материал, DSP левелинга и DAW пока не проверялись: их реализация впереди.
 
 ## Resume
 
 1. Проверить `rtk git status -sb`, прочитать [AGENTS.md](../AGENTS.md).
 2. Прочитать разделы «Связь с основным проектом», «Технические уточнения идеи»
-   и PR 01–02 в [плане](plan.md).
-3. Начать сборочный каркас; при выборе зависимостей свериться с
-   `../beat-equalizer/cmake/Dependencies.cmake`, не делать соседний checkout обязательным.
+   и PR 02 в [плане](plan.md).
+3. `rtk proxy make debug`; `rtk proxy make CONFIG=debug bench` создаёт пример WAV/CSV.
+4. Сверить `../beat-equalizer/src/dsp/OnsetAnalysis.{h,cpp}` перед проектированием
+   общего потокового контракта; соседний checkout не является зависимостью сборки.
 
 ## Открыто
 

@@ -1,0 +1,31 @@
+cmake_minimum_required(VERSION 3.22)
+
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" BEAT_LEVELER_VERSION)
+string(STRIP "${BEAT_LEVELER_VERSION}" BEAT_LEVELER_VERSION)
+if(NOT BEAT_LEVELER_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+    message(FATAL_ERROR "VERSION must be major.minor.patch")
+endif()
+
+project(BeatVolumetric VERSION ${BEAT_LEVELER_VERSION} LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+include(CTest)
+option(BEAT_LEVELER_BUILD_TOOLS "Build the WAV file runner (requires JUCE)" ON)
+include(cmake/Dependencies.cmake)
+
+add_library(beat_leveler_warnings INTERFACE)
+if(MSVC)
+    target_compile_options(beat_leveler_warnings INTERFACE /W4)
+else()
+    target_compile_options(beat_leveler_warnings INTERFACE -Wall -Wextra -Wpedantic)
+endif()
+
+add_subdirectory(src/dsp)
+if(BUILD_TESTING OR BEAT_LEVELER_BUILD_TOOLS)
+    add_subdirectory(tools)
+endif()
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
