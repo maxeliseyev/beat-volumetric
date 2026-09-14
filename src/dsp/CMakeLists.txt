@@ -1,6 +1,7 @@
 add_library(beat_leveler_dsp STATIC
     PassthroughProcessor.cpp
     DelayLine.cpp
+    DetectionMetrics.cpp
     StreamingDetector.cpp
     HitLevelMeter.cpp
     StreamingAnalyzer.cpp)

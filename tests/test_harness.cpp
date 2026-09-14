@@ -1,4 +1,5 @@
 #include "Harness.h"
+#include "dsp/DetectionMetrics.h"
 #include "dsp/PassthroughProcessor.h"
 
 #include <catch2/catch_approx.hpp>
@@ -127,6 +128,39 @@ TEST_CASE("Streaming analysis finds synthetic attacks and measures them independ
         REQUIRE(antiPhaseResult.measurements[index].peak
                 == Catch::Approx(std::pow(10.0, fixture.hits[index].peakDb / 20.0)).margin(1.0e-6));
     }
+}
+
+TEST_CASE("Detection metrics keep false positives and per-kind timing and level error separate")
+{
+    const std::array annotations {
+        AnnotatedHit { 100, -12.0f, HitKind::kick },
+        AnnotatedHit { 300, -18.0f, HitKind::ghost },
+        AnnotatedHit { 500, -6.0f, HitKind::snare }
+    };
+    const std::array detections {
+        OnsetEvent { 1, 1, 104, 120, 1.0f, EventProvenance::detector },
+        OnsetEvent { 1, 2, 306, 320, 1.0f, EventProvenance::detector },
+        OnsetEvent { 1, 3, 800, 820, 1.0f, EventProvenance::detector }
+    };
+    const std::array measurements {
+        HitMeasurement { detections[0], static_cast<float>(std::pow(10.0, -12.0 / 20.0)), 0.0f, 0.0f, 1440 },
+        HitMeasurement { detections[1], static_cast<float>(std::pow(10.0, -18.0 / 20.0)), 0.0f, 0.0f, 1440 }
+    };
+    const auto metrics = evaluateDetections(annotations, detections, measurements, 10);
+    REQUIRE(metrics.detected == 3);
+    REQUIRE(metrics.matched == 2);
+    REQUIRE(metrics.falsePositives == 1);
+    REQUIRE(metrics.falseNegatives == 1);
+    const auto& kick = metrics.byKind[static_cast<std::size_t>(HitKind::kick)];
+    REQUIRE(kick.expected == 1);
+    REQUIRE(kick.matched == 1);
+    REQUIRE(kick.meanAbsoluteTimingSamples == 4.0);
+    REQUIRE(kick.meanAbsoluteLevelErrorDb == Catch::Approx(0.0).margin(1.0e-5));
+    const auto& ghost = metrics.byKind[static_cast<std::size_t>(HitKind::ghost)];
+    REQUIRE(ghost.matched == 1);
+    REQUIRE(ghost.meanAbsoluteTimingSamples == 6.0);
+    REQUIRE(ghost.meanAbsoluteLevelErrorDb == Catch::Approx(0.0).margin(1.0e-5));
+    REQUIRE(metrics.byKind[static_cast<std::size_t>(HitKind::snare)].matched == 0);
 }
 
 TEST_CASE("Harness rejects invalid input and handles empty audio and silence")

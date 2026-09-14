@@ -20,9 +20,9 @@
 
 ## Next
 
-Довести PR 03 из [плана](plan.md#порядок-реализации): добавить размеченный
-внешний набор через `BEAT_LEVELER_REAL_KIT_DIR`, правила сопоставления событий и
-отчёт precision/recall, ошибок времени/уровней. Затем зафиксировать численные
+Довести PR 03 из [плана](plan.md#порядок-реализации): подключить CSV-manifest
+размеченного внешнего набора через `BEAT_LEVELER_REAL_KIT_DIR` к готовому matcher
+и отчёту precision/recall, ошибок времени/уровней. Затем зафиксировать численные
 baseline-пороги и решить по сравнению на наборе, остаётся ли weighted high-pass
 120 Hz подходящей мерой.
 
@@ -48,6 +48,9 @@ baseline-пороги и решить по сравнению на наборе,
   WAV/CSV с четырьмя synthetic `detected_hit`; отдельная `BUILD_TESTING=OFF`,
   `BEAT_LEVELER_BUILD_TOOLS=OFF`, `FETCHCONTENT_FULLY_DISCONNECTED=ON` конфигурация
   собирает новое DSP-ядро без внешних зависимостей.
+- После `126f114`: matcher `DetectionMetrics` покрыт synthetic-тестом на matching,
+  false positive/negative, timing и level error; `BEAT_LEVELER_REAL_KIT_DIR` в
+  текущем окружении не задан, поэтому реальный прогон не запускался.
 
 ## Resume
 
