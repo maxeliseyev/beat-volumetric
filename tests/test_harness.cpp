@@ -1,4 +1,5 @@
 #include "Harness.h"
+#include "dsp/DetectionMetrics.h"
 #include "dsp/PassthroughProcessor.h"
 
 #include <catch2/catch_approx.hpp>
@@ -90,6 +91,78 @@ TEST_CASE("Rendering preserves every sample for fixed and changing block pattern
     }
 }
 
+TEST_CASE("Streaming analysis finds synthetic attacks and measures them independently of block boundaries")
+{
+    const auto fixture = makeSynthetic(48000, 2);
+    const std::array oneSample { std::size_t { 1 } };
+    const std::array changing { std::size_t { 127 }, std::size_t { 1 }, std::size_t { 511 } };
+    const auto single = renderDetailed(fixture.audio, oneSample);
+    const auto varied = renderDetailed(fixture.audio, changing);
+    auto antiPhase = fixture.audio;
+    std::ranges::transform(antiPhase.channels[0], antiPhase.channels[1].begin(),
+                           [](float sample) { return -sample; });
+    const auto antiPhaseResult = renderDetailed(antiPhase, changing);
+
+    REQUIRE(single.audio.channels == fixture.audio.channels);
+    REQUIRE(single.events.size() == fixture.hits.size());
+    REQUIRE(single.measurements.size() == fixture.hits.size());
+    REQUIRE(varied.events.size() == single.events.size());
+    REQUIRE(varied.measurements.size() == single.measurements.size());
+    REQUIRE(antiPhaseResult.events.size() == fixture.hits.size());
+    REQUIRE(antiPhaseResult.measurements.size() == fixture.hits.size());
+    for (std::size_t index = 0; index < fixture.hits.size(); ++index)
+    {
+        const auto expectedOnset = fixture.hits[index].onsetSample;
+        REQUIRE(single.events[index].onsetSample == expectedOnset);
+        REQUIRE(varied.events[index].onsetSample == expectedOnset);
+        REQUIRE(single.events[index].decisionReadySample >= expectedOnset);
+        REQUIRE(single.measurements[index].event.id == single.events[index].id);
+        REQUIRE(varied.measurements[index].event.id == single.events[index].id);
+        REQUIRE(single.measurements[index].windowSamples == 1440);
+        const auto commonStereoPeak = std::sqrt(0.625) * std::pow(10.0, fixture.hits[index].peakDb / 20.0);
+        REQUIRE(single.measurements[index].peak == Catch::Approx(commonStereoPeak).margin(1.0e-6));
+        REQUIRE(varied.measurements[index].peak == single.measurements[index].peak);
+        REQUIRE(varied.measurements[index].rms == single.measurements[index].rms);
+        REQUIRE(varied.measurements[index].weightedRms == single.measurements[index].weightedRms);
+        REQUIRE(antiPhaseResult.events[index].onsetSample == expectedOnset);
+        REQUIRE(antiPhaseResult.measurements[index].peak
+                == Catch::Approx(std::pow(10.0, fixture.hits[index].peakDb / 20.0)).margin(1.0e-6));
+    }
+}
+
+TEST_CASE("Detection metrics keep false positives and per-kind timing and level error separate")
+{
+    const std::array annotations {
+        AnnotatedHit { 100, -12.0f, HitKind::kick },
+        AnnotatedHit { 300, -18.0f, HitKind::ghost },
+        AnnotatedHit { 500, -6.0f, HitKind::snare }
+    };
+    const std::array detections {
+        OnsetEvent { 1, 1, 104, 120, 1.0f, EventProvenance::detector },
+        OnsetEvent { 1, 2, 306, 320, 1.0f, EventProvenance::detector },
+        OnsetEvent { 1, 3, 800, 820, 1.0f, EventProvenance::detector }
+    };
+    const std::array measurements {
+        HitMeasurement { detections[0], static_cast<float>(std::pow(10.0, -12.0 / 20.0)), 0.0f, 0.0f, 1440 },
+        HitMeasurement { detections[1], static_cast<float>(std::pow(10.0, -18.0 / 20.0)), 0.0f, 0.0f, 1440 }
+    };
+    const auto metrics = evaluateDetections(annotations, detections, measurements, 10);
+    REQUIRE(metrics.detected == 3);
+    REQUIRE(metrics.matched == 2);
+    REQUIRE(metrics.falsePositives == 1);
+    REQUIRE(metrics.falseNegatives == 1);
+    const auto& kick = metrics.byKind[static_cast<std::size_t>(HitKind::kick)];
+    REQUIRE(kick.expected == 1);
+    REQUIRE(kick.matched == 1);
+    REQUIRE(kick.meanAbsoluteTimingSamples == 4.0);
+    REQUIRE(kick.meanAbsoluteLevelErrorDb == Catch::Approx(0.0).margin(1.0e-5));
+    const auto& ghost = metrics.byKind[static_cast<std::size_t>(HitKind::ghost)];
+    REQUIRE(ghost.matched == 1);
+    REQUIRE(ghost.meanAbsoluteTimingSamples == 6.0);
+    REQUIRE(ghost.meanAbsoluteLevelErrorDb == Catch::Approx(0.0).margin(1.0e-5));
+    REQUIRE(metrics.byKind[static_cast<std::size_t>(HitKind::snare)].matched == 0);
+}
+
 TEST_CASE("Harness rejects invalid input and handles empty audio and silence")
 {
     const std::array<std::size_t, 1> blocks { 127 };
@@ -103,7 +176,7 @@ TEST_CASE("Harness rejects invalid input and handles empty audio and silence")
     audio.channels = { { 0.0f, 0.0f } };
     std::ostringstream report;
     writeReport(report, audio, render(audio, blocks), {});
-    REQUIRE(report.str().find(",-240,-240,-240,-240,0\n") != std::string::npos);
+    REQUIRE(report.str().find(",-240,-240,-240,-240,0,,,\n") != std::string::npos);
     audio.channels[0][0] = std::numeric_limits<float>::quiet_NaN();
     REQUIRE_THROWS(render(audio, blocks));
     audio.channels = { { 0.0f }, {} };
@@ -124,7 +197,7 @@ TEST_CASE("Report measures changed output instead of inferring it from requested
     std::vector<std::string> values;
     for (std::string value; std::getline(fields, value, ',');)
         values.push_back(value);
-    REQUIRE(values.size() == 13);
+    REQUIRE(values.size() == 15);
     REQUIRE(std::stod(values[8]) == 0.0);
     REQUIRE(std::stod(values[9]) == Catch::Approx(-6.020599913));
     REQUIRE(std::stod(values[11]) == Catch::Approx(-6.020599913));

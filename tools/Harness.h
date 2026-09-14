@@ -1,5 +1,7 @@
 #pragma once
 
+#include "dsp/HitLevelMeter.h"
+
 #include <cstdint>
 #include <iosfwd>
 #include <span>
@@ -31,11 +33,20 @@ struct Fixture
     std::vector<KnownHit> hits;
 };
 
+struct RenderResult
+{
+    Audio audio;
+    std::vector<OnsetEvent> events;
+    std::vector<HitMeasurement> measurements;
+};
+
 Fixture makeSynthetic(int sampleRate, std::size_t numChannels);
 Audio render(const Audio& input, std::span<const std::size_t> blockPattern);
+RenderResult renderDetailed(const Audio& input, std::span<const std::size_t> blockPattern);
 void writeReport(std::ostream& stream,
                  const Audio& input,
                  const Audio& output,
-                 std::span<const KnownHit> hits);
+                 std::span<const KnownHit> hits,
+                 std::span<const HitMeasurement> measurements = {});
 
 } // namespace beat::leveler::harness

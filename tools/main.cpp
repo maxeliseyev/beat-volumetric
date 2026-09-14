@@ -58,7 +58,7 @@ int main(int argc, char** argv)
                 std::cout << "beat_leveler_runner (--synthetic | --input FILE.wav)\n"
                              "  --output NEW.wav --report NEW.csv [--blocks 127,1,511]\n"
                              "  [--sample-rate 48000 --channels 1] (synthetic only)\n"
-                             "Passthrough baseline, zero latency; WAV output is float32.\n"
+                             "Streaming detection/measurement baseline, zero output latency; WAV output is float32.\n"
                              "Output paths must be distinct and must not already exist.\n";
                 return 0;
             }
@@ -99,20 +99,22 @@ int main(int argc, char** argv)
 
         const auto fixture = synthetic ? makeSynthetic(sampleRate, channels)
                                        : Fixture { readWav(inputPath), {} };
-        const auto output = render(fixture.audio, blocks);
+        const auto result = renderDetailed(fixture.audio, blocks);
         std::filesystem::create_directories(outputPath.parent_path());
         std::filesystem::create_directories(reportPath.parent_path());
-        writeWav(outputPath, output);
+        writeWav(outputPath, result.audio);
         // Measure the actual serialized output, including file round-trip effects.
         const auto written = readWav(outputPath);
         std::ofstream report(reportPath, std::ios::binary);
-        writeReport(report, fixture.audio, written, fixture.hits);
+        writeReport(report, fixture.audio, written, fixture.hits, result.measurements);
         report.close();
         if (!report)
             throw std::runtime_error("Failed to close report");
-        std::cout << "Passthrough: " << fixture.audio.frames() << " frames, "
+        std::cout << "Streaming analyzer: " << fixture.audio.frames() << " frames, "
                   << fixture.audio.channels.size() << " channels, " << fixture.audio.sampleRate
-                  << " Hz; latency 0.\nWAV: " << outputPath << "\nCSV: " << reportPath << '\n';
+                  << " Hz; " << result.events.size() << " events, " << result.measurements.size()
+                  << " completed measurements; output latency 0.\nWAV: " << outputPath << "\nCSV: "
+                  << reportPath << '\n';
         return 0;
     }
     catch (const std::exception& error)
