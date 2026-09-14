@@ -90,6 +90,45 @@ TEST_CASE("Rendering preserves every sample for fixed and changing block pattern
     }
 }
 
+TEST_CASE("Streaming analysis finds synthetic attacks and measures them independently of block boundaries")
+{
+    const auto fixture = makeSynthetic(48000, 2);
+    const std::array oneSample { std::size_t { 1 } };
+    const std::array changing { std::size_t { 127 }, std::size_t { 1 }, std::size_t { 511 } };
+    const auto single = renderDetailed(fixture.audio, oneSample);
+    const auto varied = renderDetailed(fixture.audio, changing);
+    auto antiPhase = fixture.audio;
+    std::ranges::transform(antiPhase.channels[0], antiPhase.channels[1].begin(),
+                           [](float sample) { return -sample; });
+    const auto antiPhaseResult = renderDetailed(antiPhase, changing);
+
+    REQUIRE(single.audio.channels == fixture.audio.channels);
+    REQUIRE(single.events.size() == fixture.hits.size());
+    REQUIRE(single.measurements.size() == fixture.hits.size());
+    REQUIRE(varied.events.size() == single.events.size());
+    REQUIRE(varied.measurements.size() == single.measurements.size());
+    REQUIRE(antiPhaseResult.events.size() == fixture.hits.size());
+    REQUIRE(antiPhaseResult.measurements.size() == fixture.hits.size());
+    for (std::size_t index = 0; index < fixture.hits.size(); ++index)
+    {
+        const auto expectedOnset = fixture.hits[index].onsetSample;
+        REQUIRE(single.events[index].onsetSample == expectedOnset);
+        REQUIRE(varied.events[index].onsetSample == expectedOnset);
+        REQUIRE(single.events[index].decisionReadySample >= expectedOnset);
+        REQUIRE(single.measurements[index].event.id == single.events[index].id);
+        REQUIRE(varied.measurements[index].event.id == single.events[index].id);
+        REQUIRE(single.measurements[index].windowSamples == 1440);
+        const auto commonStereoPeak = std::sqrt(0.625) * std::pow(10.0, fixture.hits[index].peakDb / 20.0);
+        REQUIRE(single.measurements[index].peak == Catch::Approx(commonStereoPeak).margin(1.0e-6));
+        REQUIRE(varied.measurements[index].peak == single.measurements[index].peak);
+        REQUIRE(varied.measurements[index].rms == single.measurements[index].rms);
+        REQUIRE(varied.measurements[index].weightedRms == single.measurements[index].weightedRms);
+        REQUIRE(antiPhaseResult.events[index].onsetSample == expectedOnset);
+        REQUIRE(antiPhaseResult.measurements[index].peak
+                == Catch::Approx(std::pow(10.0, fixture.hits[index].peakDb / 20.0)).margin(1.0e-6));
+    }
+}
+
 TEST_CASE("Harness rejects invalid input and handles empty audio and silence")
 {
     const std::array<std::size_t, 1> blocks { 127 };
@@ -103,7 +142,7 @@ TEST_CASE("Harness rejects invalid input and handles empty audio and silence")
     audio.channels = { { 0.0f, 0.0f } };
     std::ostringstream report;
     writeReport(report, audio, render(audio, blocks), {});
-    REQUIRE(report.str().find(",-240,-240,-240,-240,0\n") != std::string::npos);
+    REQUIRE(report.str().find(",-240,-240,-240,-240,0,,,\n") != std::string::npos);
     audio.channels[0][0] = std::numeric_limits<float>::quiet_NaN();
     REQUIRE_THROWS(render(audio, blocks));
     audio.channels = { { 0.0f }, {} };
@@ -124,7 +163,7 @@ TEST_CASE("Report measures changed output instead of inferring it from requested
     std::vector<std::string> values;
     for (std::string value; std::getline(fields, value, ',');)
         values.push_back(value);
-    REQUIRE(values.size() == 13);
+    REQUIRE(values.size() == 15);
     REQUIRE(std::stod(values[8]) == 0.0);
     REQUIRE(std::stod(values[9]) == Catch::Approx(-6.020599913));
     REQUIRE(std::stod(values[11]) == Catch::Approx(-6.020599913));

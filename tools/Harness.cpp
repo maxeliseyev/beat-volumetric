@@ -1,5 +1,5 @@
 #include "Harness.h"
-#include "dsp/PassthroughProcessor.h"
+#include "dsp/StreamingAnalyzer.h"
 
 #include <algorithm>
 #include <array>
@@ -72,17 +72,26 @@ Fixture makeSynthetic(int sampleRate, std::size_t numChannels)
 
 Audio render(const Audio& input, std::span<const std::size_t> blockPattern)
 {
+    return renderDetailed(input, blockPattern).audio;
+}
+
+RenderResult renderDetailed(const Audio& input, std::span<const std::size_t> blockPattern)
+{
     input.validate();
     if (blockPattern.empty()
         || std::any_of(blockPattern.begin(), blockPattern.end(), [](auto size) { return size == 0; }))
         throw std::invalid_argument("Block pattern must contain positive sizes");
 
-    Audio output { input.sampleRate,
-                   std::vector<std::vector<float>>(input.channels.size(),
-                                                   std::vector<float>(input.frames())) };
-    PassthroughProcessor processor;
+    RenderResult result;
+    result.audio = { input.sampleRate,
+                     std::vector<std::vector<float>>(input.channels.size(),
+                                                     std::vector<float>(input.frames())) };
+    StreamingAnalyzer processor;
+    processor.prepare(input.sampleRate, input.channels.size());
     std::array<const float*, 2> source {};
     std::array<float*, 2> destination {};
+    std::array<OnsetEvent, 32> events {};
+    std::array<HitMeasurement, 32> measurements {};
     std::size_t offset = 0;
     std::size_t block = 0;
     while (offset < input.frames())
@@ -91,13 +100,20 @@ Audio render(const Audio& input, std::span<const std::size_t> blockPattern)
         for (std::size_t channel = 0; channel < input.channels.size(); ++channel)
         {
             source[channel] = input.channels[channel].data() + offset;
-            destination[channel] = output.channels[channel].data() + offset;
+            destination[channel] = result.audio.channels[channel].data() + offset;
         }
-        processor.process(source.data(), destination.data(), input.channels.size(), count);
+        const auto measurementCount = processor.process(source.data(), destination.data(), count,
+                                                        events, measurements);
+        const auto eventCount = std::count_if(events.begin(), events.end(), [](const auto& event)
+                                              { return event.id != 0; });
+        result.events.insert(result.events.end(), events.begin(), events.begin() + static_cast<std::ptrdiff_t>(eventCount));
+        result.measurements.insert(result.measurements.end(), measurements.begin(),
+                                   measurements.begin() + static_cast<std::ptrdiff_t>(measurementCount));
+        events.fill({});
         offset += count;
         block = (block + 1) % blockPattern.size();
     }
-    return output;
+    return result;
 }
 
 namespace
@@ -130,7 +146,7 @@ void writeRow(std::ostream& stream,
     const auto divisor = static_cast<double>(std::max(std::size_t { 1 }, length));
     stream << ',' << db(inPeak) << ',' << db(outPeak)
            << ',' << db(std::sqrt(inEnergy / divisor))
-           << ',' << db(std::sqrt(outEnergy / divisor)) << ',' << maxError << '\n';
+           << ',' << db(std::sqrt(outEnergy / divisor)) << ',' << maxError;
 }
 
 } // namespace
@@ -138,7 +154,8 @@ void writeRow(std::ostream& stream,
 void writeReport(std::ostream& stream,
                  const Audio& input,
                  const Audio& output,
-                 std::span<const KnownHit> hits)
+                 std::span<const KnownHit> hits,
+                 std::span<const HitMeasurement> measurements)
 {
     input.validate();
     output.validate();
@@ -158,17 +175,18 @@ void writeReport(std::ostream& stream,
     stream << std::setprecision(17);
     stream << "version,processor,kind,sample_rate,channel,start_sample,length_samples,"
               "expected_peak_dbfs,input_peak_dbfs,output_peak_dbfs,input_rms_dbfs,"
-              "output_rms_dbfs,max_abs_error\n";
+              "output_rms_dbfs,max_abs_error,detected_id,confidence,weighted_rms_dbfs\n";
     for (std::size_t channel = 0; channel < input.channels.size(); ++channel)
     {
         const auto prefix = [&](const char* kind, std::size_t start, std::size_t length)
         {
-            stream << BEAT_LEVELER_VERSION << ",passthrough," << kind << ',' << input.sampleRate
+            stream << BEAT_LEVELER_VERSION << ",streaming_analyzer," << kind << ',' << input.sampleRate
                    << ',' << channel + 1 << ',' << start << ',' << length;
         };
         prefix("summary", 0, input.frames());
         stream << ',';
         writeRow(stream, input, output, channel, 0, input.frames());
+        stream << ",,,\n";
         for (const auto& hit : hits)
         {
             const auto start = static_cast<std::size_t>(hit.onsetSample);
@@ -176,6 +194,17 @@ void writeReport(std::ostream& stream,
             prefix("known_hit", start, length);
             stream << ',' << hit.peakDb + (channel == 0 ? 0.0 : db(0.5));
             writeRow(stream, input, output, channel, start, length);
+            stream << ",,,\n";
+        }
+        for (const auto& measurement : measurements)
+        {
+            const auto start = static_cast<std::size_t>(measurement.event.onsetSample);
+            const auto length = measurement.windowSamples;
+            prefix("detected_hit", start, length);
+            stream << ",";
+            writeRow(stream, input, output, channel, start, length);
+            stream << ',' << measurement.event.id << ',' << measurement.event.confidence << ','
+                   << db(measurement.weightedRms) << '\n';
         }
     }
     if (!stream)
