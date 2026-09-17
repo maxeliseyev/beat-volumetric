@@ -80,6 +80,7 @@ void BeatVolumetricAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         {
             hitCount.fetch_add(1, std::memory_order_relaxed);
             confidence.store(event.confidence, std::memory_order_relaxed);
+            onsetSample.store(event.onsetSample, std::memory_order_relaxed);
         }
     }
     for (std::size_t index = 0; index < measurementsWritten; ++index)

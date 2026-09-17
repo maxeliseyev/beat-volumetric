@@ -62,6 +62,11 @@ void BeatVolumetricAudioProcessorEditor::timerCallback()
 {
     volumetricProcessor.copyScope(scopeScratch.data(), scopeScratch.size());
     scope.setWaveform(scopeScratch.data(), scopeScratch.size());
+    const auto end = volumetricProcessor.scopeSample();
+    const auto onset = volumetricProcessor.lastOnsetSample();
+    const auto length = static_cast<std::int64_t>(volumetricProcessor.scopeLength());
+    const auto position = length > 0 ? static_cast<float>(onset - (end - length)) / static_cast<float>(length) : -1.0f;
+    scope.setMarker(position, volumetricProcessor.lastConfidence());
     hits.setText("Hits  " + juce::String(static_cast<juce::int64>(volumetricProcessor.detectedHits())), juce::dontSendNotification);
     peak.setText("Peak  " + juce::String(volumetricProcessor.lastPeakDbfs(), 1) + " dBFS", juce::dontSendNotification);
     certainty.setText("Confidence  " + juce::String(100.0f * volumetricProcessor.lastConfidence(), 0) + "%", juce::dontSendNotification);

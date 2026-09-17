@@ -38,6 +38,9 @@ public:
     float lastPeakDbfs() const noexcept { return lastPeak.load(); }
     float lastConfidence() const noexcept { return confidence.load(); }
     void copyScope(float* destination, std::size_t count) const noexcept { scope.copyLast(destination, count); }
+    std::int64_t scopeSample() const noexcept { return scope.currentSample(); }
+    std::size_t scopeLength() const noexcept { return scope.length(); }
+    std::int64_t lastOnsetSample() const noexcept { return onsetSample.load(); }
 
 private:
     static BusesProperties buses();
@@ -50,6 +53,7 @@ private:
     std::atomic<std::uint64_t> hitCount { 0 };
     std::atomic<float> lastPeak { -240.0f };
     std::atomic<float> confidence { 0.0f };
+    std::atomic<std::int64_t> onsetSample { -1 };
     ScopeRing scope;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BeatVolumetricAudioProcessor)
 };
