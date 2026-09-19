@@ -4,7 +4,8 @@ add_library(beat_leveler_dsp STATIC
     DetectionMetrics.cpp
     StreamingDetector.cpp
     HitLevelMeter.cpp
-    StreamingAnalyzer.cpp)
+    StreamingAnalyzer.cpp
+    StreamingLeveler.cpp)
 target_include_directories(beat_leveler_dsp PUBLIC "${PROJECT_SOURCE_DIR}/src")
 target_compile_features(beat_leveler_dsp PUBLIC cxx_std_20)
 target_link_libraries(beat_leveler_dsp PRIVATE beat_leveler_warnings)

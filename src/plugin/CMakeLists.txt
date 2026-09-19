@@ -23,3 +23,16 @@ target_link_libraries(BeatVolumetric
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 target_compile_definitions(BeatVolumetric PUBLIC
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_REPORT_APP_USAGE=0)
+
+# JUCE's VST3 helper adds moduleinfo.json after its initial ad-hoc signature.
+# Re-sign the finished development bundles so a host sees a valid sealed bundle.
+if(APPLE)
+    find_program(BEAT_LEVELER_CODESIGN codesign REQUIRED)
+    foreach(format VST3 AU Standalone)
+        if(TARGET BeatVolumetric_${format})
+            add_custom_command(TARGET BeatVolumetric_${format} POST_BUILD
+                COMMAND "${BEAT_LEVELER_CODESIGN}" --force --deep --sign -
+                    "$<TARGET_BUNDLE_DIR:BeatVolumetric_${format}>")
+        endif()
+    endforeach()
+endif()

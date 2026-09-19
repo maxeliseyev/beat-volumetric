@@ -1,6 +1,8 @@
+#include "Harness.h"
 #include "dsp/DelayLine.h"
 #include "dsp/Event.h"
 #include "dsp/Latency.h"
+#include "dsp/StreamingLeveler.h"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -45,6 +47,51 @@ std::vector<float> render(const std::vector<float>& input,
         block = (block + 1) % blocks.size();
     }
     return output;
+}
+
+struct LevelerRender
+{
+    std::vector<std::vector<float>> output;
+    std::vector<OnsetEvent> events;
+    std::vector<HitMeasurement> measurements;
+};
+
+LevelerRender renderLeveler(const std::vector<std::vector<float>>& input,
+                            int sampleRate,
+                            const LevelerParameters& parameters,
+                            const std::vector<std::size_t>& blocks)
+{
+    LevelerRender result;
+    result.output.assign(input.size(), std::vector<float>(input.front().size(), 0.0f));
+    StreamingLeveler leveler;
+    leveler.prepare(sampleRate, input.size());
+    std::array<const float*, 2> source {};
+    std::array<float*, 2> destination {};
+    std::array<OnsetEvent, 32> events {};
+    std::array<HitMeasurement, 32> measurements {};
+    std::size_t offset = 0;
+    std::size_t block = 0;
+    while (offset < input.front().size())
+    {
+        const auto count = std::min(blocks[block], input.front().size() - offset);
+        for (std::size_t channel = 0; channel < input.size(); ++channel)
+        {
+            source[channel] = input[channel].data() + offset;
+            destination[channel] = result.output[channel].data() + offset;
+        }
+        const auto measurementCount = leveler.process(source.data(), destination.data(), count,
+                                                      parameters, events, measurements);
+        const auto eventCount = std::count_if(events.begin(), events.end(),
+                                              [](const auto& event) { return event.id != 0; });
+        result.events.insert(result.events.end(), events.begin(),
+                             events.begin() + static_cast<std::ptrdiff_t>(eventCount));
+        result.measurements.insert(result.measurements.end(), measurements.begin(),
+                                   measurements.begin() + static_cast<std::ptrdiff_t>(measurementCount));
+        events.fill({});
+        offset += count;
+        block = (block + 1) % blocks.size();
+    }
+    return result;
 }
 
 } // namespace
@@ -125,4 +172,55 @@ TEST_CASE("An event is late when its decision misses the delayed attack deadline
     REQUIRE_FALSE(isReadyBeforeAttack(event, 2001, 1000));
     event.decisionReadySample = 2001;
     REQUIRE_FALSE(isReadyBeforeAttack(event, 1960, 1000));
+}
+
+TEST_CASE("Streaming leveler keeps unity gain while applying the declared lookahead")
+{
+    const auto fixture = beat::leveler::harness::makeSynthetic(48000, 2);
+    const LevelerParameters parameters { 0.0f, false, -12.0f, 1.0f, 6.0f, 12.0f };
+    const auto rendered = renderLeveler(fixture.audio.channels, fixture.audio.sampleRate,
+                                        parameters, { 127, 1, 511 });
+    StreamingLeveler reference;
+    reference.prepare(fixture.audio.sampleRate, fixture.audio.channels.size());
+    const auto latency = reference.latencySamples();
+    REQUIRE(rendered.events.size() == fixture.hits.size());
+    REQUIRE(rendered.measurements.size() == fixture.hits.size());
+    for (std::size_t channel = 0; channel < fixture.audio.channels.size(); ++channel)
+    {
+        for (std::size_t output = 0; output < rendered.output[channel].size(); ++output)
+        {
+            const auto expected = output >= latency ? fixture.audio.channels[channel][output - latency] : 0.0f;
+            REQUIRE(rendered.output[channel][output] == expected);
+        }
+    }
+
+    const LevelerParameters dryParameters { 1.0f, false, -12.0f, 0.0f, 6.0f, 12.0f };
+    const auto dry = renderLeveler(fixture.audio.channels, fixture.audio.sampleRate,
+                                   dryParameters, { 256 });
+    REQUIRE(dry.output == rendered.output);
+}
+
+TEST_CASE("Streaming leveler applies one common measured gain independent of host blocks")
+{
+    const auto fixture = beat::leveler::harness::makeSynthetic(48000, 2);
+    const LevelerParameters parameters { 0.5f, false, -12.0f, 1.0f, 6.0f, 12.0f };
+    const auto single = renderLeveler(fixture.audio.channels, fixture.audio.sampleRate,
+                                      parameters, { 1 });
+    const auto varied = renderLeveler(fixture.audio.channels, fixture.audio.sampleRate,
+                                      parameters, { 127, 1, 511 });
+    REQUIRE(single.output == varied.output);
+    REQUIRE(single.measurements.size() == fixture.hits.size());
+
+    const auto& measurement = single.measurements.front();
+    const auto measuredDb = 20.0f * std::log10(measurement.weightedRms);
+    const auto requestedDb = std::clamp((parameters.targetDbfs - measuredDb) * parameters.strength,
+                                        -parameters.maxCutDb, parameters.maxBoostDb);
+    const auto expectedGain = std::pow(10.0f, requestedDb / 20.0f);
+    const auto latency = static_cast<std::size_t>(std::llround(0.056 * fixture.audio.sampleRate));
+    const auto source = static_cast<std::size_t>(fixture.hits.front().onsetSample) + 100;
+    REQUIRE(std::abs(fixture.audio.channels[0][source]) > 1.0e-5f);
+    REQUIRE(single.output[0][source + latency] / fixture.audio.channels[0][source]
+            == Catch::Approx(expectedGain).margin(1.0e-5));
+    REQUIRE(single.output[1][source + latency] / fixture.audio.channels[1][source]
+            == Catch::Approx(expectedGain).margin(1.0e-5));
 }

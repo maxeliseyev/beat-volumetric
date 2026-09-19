@@ -1,6 +1,6 @@
 CONFIG ?= release
 
-.PHONY: all debug configure build test bench
+.PHONY: all debug configure build test bench app release-dmg
 
 all: test
 
@@ -18,3 +18,9 @@ test: build
 
 bench: build
 	cmake "-DRUNNER=$(CURDIR)/build/$(CONFIG)/tools/beat_leveler_runner" "-DOUTPUT_DIR=$(CURDIR)/build/$(CONFIG)/bench" -P scripts/bench.cmake
+
+app:
+	CONFIG=$(CONFIG) scripts/package-macos.sh
+
+release-dmg:
+	CONFIG=$(CONFIG) scripts/package-macos.sh --notarize
