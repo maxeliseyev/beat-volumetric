@@ -5,4 +5,7 @@
 - C++20/CMake Debug/Release scaffold with a standalone DSP library and Catch2 tests.
 - Deterministic synthetic hits with known onsets and peak levels.
 - Offline mono/stereo WAV runner, configurable block pattern and measured CSV report.
-- The processor currently passes audio through unchanged with zero latency.
+- Streaming detector, level meter and base gain scheduler with a fixed 56 ms lookahead.
+- Development AU/VST3/Standalone targets with Strength, Auto/Manual Target and Dry/Wet.
+- macOS packaging script for Developer ID signing, notarization, stapling and DMG creation.
+- The real-recording host matrix, sidechain, bypass/difference and final plugin IDs remain open.

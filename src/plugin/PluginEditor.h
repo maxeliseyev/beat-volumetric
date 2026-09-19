@@ -14,11 +14,12 @@ public:
 private:
     void timerCallback() override;
     BeatVolumetricAudioProcessor& volumetricProcessor;
-    juce::Label title, status, hits, peak, certainty;
+    juce::Label title, status, strengthLabel, targetLabel, mixLabel, waveformLabel;
+    juce::Label hits, peak, certainty, gain;
     juce::Slider strength, targetLevel, mix;
     juce::ComboBox targetMode;
     WaveformScope scope;
-    std::vector<float> scopeScratch { 2048 };
+    std::vector<float> scopeScratch = std::vector<float>(2048, 0.0f);
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> strengthAttachment, targetAttachment, mixAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> targetModeAttachment;
 };

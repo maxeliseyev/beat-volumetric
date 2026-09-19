@@ -4,10 +4,10 @@
 Сайд-проект [Beat Equalizer](https://github.com/maxeliseyev/beat-equalizer): общие наработки по
 детекции, отдельный продукт и независимый цикл выпуска.
 
-**Статус: начат PR 03.** Есть C++20/CMake-каркас, автономное потоковое DSP-ядро
-с детекцией и измерением уровня, а также файловый тестовый стенд. Выравнивание,
-plugin-адаптер и проверка на размеченном реальном материале пока не реализованы;
-текущий аудиотракт передаёт сигнал без изменений с нулевой задержкой.
+**Статус: начат PR 04.** Есть C++20/CMake-каркас, автономное потоковое DSP-ядро
+с детекцией, измерением и базовым gain-law, а также development-плагин AU/VST3/
+Standalone. Плагин уже обрабатывает mono/stereo с lookahead 56 мс; прослушивание
+на реальных записях и host-проверка ещё впереди.
 Beat Volumetric — рабочее название; имя репозитория — `beat-volumetric`.
 
 ## Идея
@@ -66,17 +66,34 @@ Makefile — обёртка над `cmake --preset debug|release`, `cmake --buil
 и `ctest --preset ...`. Артефакты находятся в `build/debug` и `build/release`.
 Версия проекта берётся из [VERSION](VERSION), изменения — в [CHANGELOG.md](CHANGELOG.md).
 
+Подпись и раздача macOS описаны в [docs/packaging-macos.md](docs/packaging-macos.md):
+`make app` делает подписанный DMG для локальной проверки, а `make release-dmg`
+добавляет notarization и stapling для передачи на другой Mac. Для этого нужен
+`Developer ID Application`, Team ID и сохранённый профиль `notarytool`.
+
 Только ядро, без JUCE, Catch2 и сетевых загрузок:
 
 ```bash
 cmake -S . -B build/dsp-only -G Ninja \
-  -DBUILD_TESTING=OFF -DBEAT_LEVELER_BUILD_TOOLS=OFF
+  -DBUILD_TESTING=OFF -DBEAT_LEVELER_BUILD_TOOLS=OFF -DBEAT_LEVELER_BUILD_PLUGIN=OFF
 cmake --build build/dsp-only
 ```
 
 Если оставить `BUILD_TESTING=ON`, будут собраны Catch2 и DSP-тесты без JUCE.
-DSP-библиотека не зависит от GUI или файловых форматов. JUCE нужен только WAV-стенду;
-сборок VST3/AU/Standalone на этом этапе ещё нет.
+DSP-библиотека не зависит от GUI или файловых форматов. При включённом по умолчанию
+`BEAT_LEVELER_BUILD_PLUGIN=ON` JUCE также собирает development-артефакты:
+
+```text
+build/debug/src/plugin/BeatVolumetric_artefacts/Debug/VST3/BeatVolumetricDev.vst3
+build/debug/src/plugin/BeatVolumetric_artefacts/Debug/AU/BeatVolumetricDev.component
+build/debug/src/plugin/BeatVolumetric_artefacts/Debug/Standalone/BeatVolumetricDev.app
+```
+
+Raw VST3/AU из `build/` остаются ad-hoc development bundles; для передачи на
+другой Mac использовать только DMG из `make app` или `make release-dmg`. В Reaper/Logic нужно проверить PDC около 56 мс,
+начальный нулевой участок из-за lookahead, Strength, Auto/Manual Target и Dry/Wet.
+Защита от клиппинга не добавлена: максимум подъёма сейчас +6 dB, поэтому запас
+по уровню на исходной дорожке обязателен.
 
 ## Файловый стенд
 
@@ -118,6 +135,7 @@ WAV round-trip и защиту существующих файлов. Реаль
 | [AGENTS.md](AGENTS.md) | Правила разработки и DSP-инварианты |
 | [docs/plan.md](docs/plan.md) | Архитектура, этапы, проверки и открытые решения |
 | [docs/status.md](docs/status.md) | Где остановились и следующий шаг |
+| [docs/packaging-macos.md](docs/packaging-macos.md) | Подпись, notarization и раздача macOS |
 | [drum-leveler-project.md](drum-leveler-project.md) | Исходная идея продукта |
 
 Связь с Beat Equalizer не должна требовать соседнего checkout для сборки.

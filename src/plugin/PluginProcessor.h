@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dsp/StreamingAnalyzer.h"
+#include "dsp/StreamingLeveler.h"
 #include "ScopeRing.h"
 
 #include <array>
@@ -36,6 +36,7 @@ public:
     juce::AudioProcessorValueTreeState& state() noexcept { return parameters; }
     std::uint64_t detectedHits() const noexcept { return hitCount.load(); }
     float lastPeakDbfs() const noexcept { return lastPeak.load(); }
+    float lastGainDb() const noexcept { return gain.load(); }
     float lastConfidence() const noexcept { return confidence.load(); }
     void copyScope(float* destination, std::size_t count) const noexcept { scope.copyLast(destination, count); }
     std::int64_t scopeSample() const noexcept { return scope.currentSample(); }
@@ -47,13 +48,18 @@ private:
     static juce::AudioProcessorValueTreeState::ParameterLayout parameterLayout();
 
     juce::AudioProcessorValueTreeState parameters;
-    beat::leveler::StreamingAnalyzer analyzer;
+    beat::leveler::StreamingLeveler leveler;
     std::array<beat::leveler::OnsetEvent, 32> events {};
     std::array<beat::leveler::HitMeasurement, 32> measurements {};
     std::atomic<std::uint64_t> hitCount { 0 };
     std::atomic<float> lastPeak { -240.0f };
+    std::atomic<float> gain { 0.0f };
     std::atomic<float> confidence { 0.0f };
     std::atomic<std::int64_t> onsetSample { -1 };
     ScopeRing scope;
+    std::atomic<float>* strengthParameter = nullptr;
+    std::atomic<float>* targetModeParameter = nullptr;
+    std::atomic<float>* targetDbfsParameter = nullptr;
+    std::atomic<float>* mixParameter = nullptr;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BeatVolumetricAudioProcessor)
 };

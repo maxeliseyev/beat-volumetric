@@ -1,30 +1,35 @@
 # Текущий статус
 
-Обновлено: 2026-09-14.
+Обновлено: 2026-09-19.
 
 ## Branch
 
-`feat/streaming-detection-and-level-meter`, ответвлена от актуального `main`
-(`b95bda6`, PR #2 уже squash-слит). Remote — `origin`. Рабочее дерево содержит
-незакоммиченную реализацию начальной части PR 03; новый PR пока не открыт.
+`feat/realtime-gain-leveler`, ответвлена от актуального `main` (`a843297`, PR #4
+уже squash-слит). Remote — `origin`. Ветка содержит незакоммиченную реализацию
+базового PR 04; новый PR пока не открыт.
 
 ## Now
 
 - C++20/CMake Debug/Release, Makefile, VERSION 0.1.0 и changelog.
-- Автономный `beat_leveler_dsp`: passthrough-аудиотракт, потоковые spectral-flux
-  detector и level meter для mono/stereo без выходной latency.
+- Автономный `beat_leveler_dsp`: потоковые spectral-flux detector, level meter и
+  `StreamingLeveler` для mono/stereo с общей 56 ms lookahead latency.
 - Синтетические удары с эталонными onset/peak; WAV runner и CSV измеренного выхода.
 - Catch2-тесты DSP/стенда и интеграционный CLI-прогон без GUI.
-- Потоковый контракт событий, latency-бюджет и кольцевой delay line реализованы.
-- Потоковая детекция/измерение начаты; gain law и plugin-адаптер ещё не реализованы.
+- Потоковый контракт событий, latency-бюджет, кольцевой delay line и базовый gain law
+  реализованы без выделений в audio callback.
+- Development AU/VST3/Standalone подключены к DSP через JUCE; UI показывает hits,
+  peak, confidence и применённый gain. Раскладка UI разделяет controls, input
+  waveform и telemetry; scope получает входной сигнал до leveler.
+- Добавлен `scripts/package-macos.sh`: Developer ID signing, Hardened Runtime,
+  notarization/stapling вложенных bundles и подписанный DMG; Makefile получил
+  `app` и `release-dmg`.
 
 ## Next
 
-Довести PR 03 из [плана](plan.md#порядок-реализации): подключить CSV-manifest
-размеченного внешнего набора через `BEAT_LEVELER_REAL_KIT_DIR` к готовому matcher
-и отчёту precision/recall, ошибок времени/уровней. Затем зафиксировать численные
-baseline-пороги и решить по сравнению на наборе, остаётся ли weighted high-pass
-120 Hz подходящей мерой.
+Проверить development VST3/AU на реальной записи в Reaper/Logic: PDC, слышимый
+эффект Strength/Target/Dry-Wet, атаки, хвосты, плотные раскаты и перегрузка. Затем
+доделать PR 03 file-side manifest/real-kit отчёт и зафиксировать baseline
+precision/recall, false positives, timing и level error до расширения gain-поведения.
 
 ## Проверено
 
@@ -51,17 +56,37 @@ baseline-пороги и решить по сравнению на наборе,
 - После `126f114`: matcher `DetectionMetrics` покрыт synthetic-тестом на matching,
   false positive/negative, timing и level error; `BEAT_LEVELER_REAL_KIT_DIR` в
   текущем окружении не задан, поэтому реальный прогон не запускался.
+- На `feat/realtime-gain-leveler`: `rtk proxy make debug` — 2/2 CTest; Debug
+  собирает AU, VST3 и Standalone. DSP-тесты проверяют unity с lookahead, общий
+  stereo gain и одинаковый результат при блоках `1` и `127,1,511`.
+- После исправления UI: `rtk proxy make debug` — 2/2 CTest; Debug-сборка
+  пересобирает Editor/Processor и повторно подписывает AU, VST3 и Standalone.
+  Визуально необходимо подтвердить новую раскладку в Reaper после повторного
+  сканирования/загрузки bundle.
+- Release CTest 2/2 и `make all bench` также проходят; `BUILD_TESTING=OFF`,
+  `BEAT_LEVELER_BUILD_TOOLS=OFF`, `BEAT_LEVELER_BUILD_PLUGIN=OFF` собирает DSP
+  без JUCE. Финальные Debug/Release AU, VST3 и Standalone bundles проходят
+  `codesign --verify --deep --strict` после post-build ad-hoc подписи.
+- Реальная запись и целевые DAW в этом окружении не проверялись; development IDs
+  и code signing не являются релизными.
+- Packaging-путь проверен синтаксически и на отсутствии credentials: текущий
+  Keychain не содержит `Developer ID Application`, поэтому реальный signing,
+  notarization и DMG не запускались.
 
 ## Resume
 
-1. Проверить `rtk git status -sb`, прочитать [AGENTS.md](../AGENTS.md) и текущий
-   diff PR 03.
-2. `rtk proxy make debug`; `rtk proxy make CONFIG=debug bench` создаёт пример WAV/CSV
-   с `detected_hit`.
-3. Спроектировать file-side manifest и matcher для размеченного материала, не добавляя
-   аудио в git; пропускать прогон явно при отсутствии `BEAT_LEVELER_REAL_KIT_DIR`.
-4. На замороженном наборе отделить precision, recall, ложные подъёмы, timing и level
-   error; только затем менять порог или weighted-фильтр.
+1. В DAW повторно загрузить свежий `build/debug/src/plugin/BeatVolumetric_artefacts/Debug/VST3/
+   BeatVolumetricDev.vst3` (или AU), подтвердить layout/scope и записать
+   наблюдения инженера по реальному drum track.
+2. Получить Developer ID Application, Team ID и app-specific password; сохранить
+   credentials профилем `beat-volumetric`, затем проверить `make app` и
+   `make release-dmg` на отдельном Mac.
+3. Проверить отдельными проходами `mix=0`, `strength=0`, ручную цель и Auto; сохранить
+   исходник/обработанный bounce вне git и отметить PDC/первые 56 мс.
+4. Подключить CSV-manifest размеченного внешнего набора через
+   `BEAT_LEVELER_REAL_KIT_DIR` к matcher и отчёту precision/recall.
+5. Только после baseline решать по weighted high-pass, плотным пассажам и переходить
+   к полноценному PR 05.
 
 ## Открыто
 
