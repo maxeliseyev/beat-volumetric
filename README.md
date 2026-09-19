@@ -107,6 +107,23 @@ build/debug/tools/beat_leveler_runner --input /path/to/drums.wav \
   --blocks 256 --output build/example/processed.wav --report build/example/processed.csv
 ```
 
+Для размеченного набора реальных записей задайте `BEAT_LEVELER_REAL_KIT_DIR`.
+В каталоге должен быть `manifest.csv` с колонками
+`file,onset_sample,peak_dbfs,kind`; `kind` — `kick`, `snare`, `tom`, `ghost`,
+`flam` или `bleed`. Одна запись manifest может содержать несколько ударов одного
+WAV. Запуск пишет только CSV-отчёт и не изменяет исходные записи:
+
+```bash
+BEAT_LEVELER_REAL_KIT_DIR=/path/to/real-kit \
+  build/debug/tools/beat_leveler_runner --blocks 256 --tolerance-ms 20 \
+  --report build/example/real-kit.csv
+```
+
+В отчёте есть общие precision/recall, false positives/negatives, timing и
+level error, а также строки по категориям разметки. Precision остаётся общей:
+детектор пока не классифицирует инструмент, поэтому категория используется для
+раздельного recall и ошибок, а не для ложного обещания per-kind precision.
+
 `--blocks` — повторяемая последовательность размеров; последний блок укорачивается
 по длине файла. Стенд читает mono/stereo WAV, сохраняет sample rate (8000–192000 Hz)
 и пишет float32 WAV. Исходный файл и результаты предыдущих запусков не перезаписывает:

@@ -23,6 +23,21 @@ run_ok(--synthetic --channels 2 --sample-rate 44100 --blocks 127,1,511
     --output "${DIR}/a.wav" --report "${DIR}/a.csv")
 run_ok(--synthetic --channels 2 --sample-rate 44100 --blocks 256
     --output "${DIR}/b.wav" --report "${DIR}/b.csv")
+file(WRITE "${DIR}/manifest.csv"
+    "file,onset_sample,peak_dbfs,kind\n"
+    "a.wav,4410,-24,kick\n"
+    "a.wav,22050,-12,snare\n"
+    "a.wav,39690,-30,tom\n"
+    "a.wav,57330,-6,ghost\n")
+run_ok(--real-kit "${DIR}" --blocks 127,1,511 --tolerance-ms 20
+    --report "${DIR}/real-kit.csv")
+file(READ "${DIR}/real-kit.csv" real_kit)
+string(FIND "${real_kit}" ",all,4,4,4,0,0,1,1," real_summary)
+if(real_summary EQUAL -1)
+    message(FATAL_ERROR "Real-kit report has no expected overall summary: ${real_kit}")
+endif()
+set(ENV{BEAT_LEVELER_REAL_KIT_DIR} "${DIR}")
+run_ok(--blocks 256 --report "${DIR}/real-kit-env.csv")
 run_ok(--input "${DIR}/a.wav" --blocks 1,2048,7
     --output "${DIR}/roundtrip.wav" --report "${DIR}/roundtrip.csv")
 

@@ -4,9 +4,9 @@
 
 ## Branch
 
-`feat/realtime-gain-leveler`, ответвлена от актуального `main` (`a843297`, PR #4
+`feat/real-kit-manifest`, ответвлена от актуального `main` (`a3ea88b`, PR #5
 уже squash-слит). Remote — `origin`. Ветка содержит незакоммиченную реализацию
-базового PR 04; новый PR пока не открыт.
+CSV-manifest и real-kit CLI; новый PR пока не открыт.
 
 ## Now
 
@@ -23,13 +23,17 @@
 - Добавлен `scripts/package-macos.sh`: Developer ID signing, Hardened Runtime,
   notarization/stapling вложенных bundles и подписанный DMG; Makefile получил
   `app` и `release-dmg`.
+- Добавлен file-side real-kit runner: `manifest.csv` группирует разметку по WAV,
+  общий потоковый анализатор прогоняется с тем же block pattern, а CSV отдельно
+  сохраняет общие и категориальные expected/matched/false-negative, global
+  precision/recall, timing и level error.
 
 ## Next
 
-Проверить development VST3/AU на реальной записи в Reaper/Logic: PDC, слышимый
-эффект Strength/Target/Dry-Wet, атаки, хвосты, плотные раскаты и перегрузка. Затем
-доделать PR 03 file-side manifest/real-kit отчёт и зафиксировать baseline
-precision/recall, false positives, timing и level error до расширения gain-поведения.
+Прогнать `BEAT_LEVELER_REAL_KIT_DIR` на размеченном наборе и зафиксировать baseline
+precision/recall, false positives, timing и level error. Параллельно проверить
+development VST3/AU на реальной записи в Reaper/Logic: PDC, слышимый эффект
+Strength/Target/Dry-Wet, атаки, хвосты, плотные раскаты и перегрузка.
 
 ## Проверено
 
@@ -45,7 +49,8 @@ precision/recall, false positives, timing и level error до расширени
 - После PR 02: Debug CTest 2/2; delay line даёт импульс ровно через заявленные
   отсчёты, одинаковый результат при блоках 1 и 127/511/64, latency 56 мс округляется
   в 2688 отсчётов при 48 kHz и 2470 при 44.1 kHz.
-- Реальный материал, DSP левелинга и DAW пока не проверялись: их реализация впереди.
+- Реальный материал и целевые DAW пока не проверялись; DSP leveler уже подключён,
+  но его музыкальная пригодность на внешних записях не подтверждена.
 - На ветке PR 03: `rtk proxy make debug` — 2/2 CTest. Синтетический runner при
   48 kHz фиксирует четыре события и четыре завершённых измерения и даёт одинаковый
   результат для блоков `1` и `127,1,511`; противофазный stereo не отменяет события.
@@ -63,6 +68,9 @@ precision/recall, false positives, timing и level error до расширени
   пересобирает Editor/Processor и повторно подписывает AU, VST3 и Standalone.
   Визуально необходимо подтвердить новую раскладку в Reaper после повторного
   сканирования/загрузки bundle.
+- Real-kit CLI прогнан на существующем synthetic WAV с временным manifest:
+  4/4 detections matched, 0 false positives и 0 false negatives; CSV содержит
+  overall и per-kind строки. Реальный внешний набор в окружении не задан.
 - Release CTest 2/2 и `make all bench` также проходят; `BUILD_TESTING=OFF`,
   `BEAT_LEVELER_BUILD_TOOLS=OFF`, `BEAT_LEVELER_BUILD_PLUGIN=OFF` собирает DSP
   без JUCE. Финальные Debug/Release AU, VST3 и Standalone bundles проходят
@@ -75,16 +83,16 @@ precision/recall, false positives, timing и level error до расширени
 
 ## Resume
 
-1. В DAW повторно загрузить свежий `build/debug/src/plugin/BeatVolumetric_artefacts/Debug/VST3/
+1. Передать инженеру формат `manifest.csv`, получить размеченный real kit и
+   прогнать его через `BEAT_LEVELER_REAL_KIT_DIR`; сохранить CSV baseline вне git.
+2. В DAW загрузить свежий `build/debug/src/plugin/BeatVolumetric_artefacts/Debug/VST3/
    BeatVolumetricDev.vst3` (или AU), подтвердить layout/scope и записать
    наблюдения инженера по реальному drum track.
-2. Получить Developer ID Application, Team ID и app-specific password; сохранить
+3. Получить Developer ID Application, Team ID и app-specific password; сохранить
    credentials профилем `beat-volumetric`, затем проверить `make app` и
    `make release-dmg` на отдельном Mac.
-3. Проверить отдельными проходами `mix=0`, `strength=0`, ручную цель и Auto; сохранить
+4. Проверить отдельными проходами `mix=0`, `strength=0`, ручную цель и Auto; сохранить
    исходник/обработанный bounce вне git и отметить PDC/первые 56 мс.
-4. Подключить CSV-manifest размеченного внешнего набора через
-   `BEAT_LEVELER_REAL_KIT_DIR` к matcher и отчёту precision/recall.
 5. Только после baseline решать по weighted high-pass, плотным пассажам и переходить
    к полноценному PR 05.
 

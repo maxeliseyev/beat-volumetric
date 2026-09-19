@@ -1,4 +1,5 @@
 #include "Harness.h"
+#include "RealKitManifest.h"
 #include "dsp/DetectionMetrics.h"
 #include "dsp/PassthroughProcessor.h"
 
@@ -161,6 +162,31 @@ TEST_CASE("Detection metrics keep false positives and per-kind timing and level 
     REQUIRE(ghost.meanAbsoluteTimingSamples == 6.0);
     REQUIRE(ghost.meanAbsoluteLevelErrorDb == Catch::Approx(0.0).margin(1.0e-5));
     REQUIRE(metrics.byKind[static_cast<std::size_t>(HitKind::snare)].matched == 0);
+}
+
+TEST_CASE("Real-kit manifest groups annotations and keeps paths inside the kit")
+{
+    std::istringstream manifest {
+        "file,onset_sample,peak_dbfs,kind\n"
+        "\"drums,01.wav\",4800,-12.0,kick\n"
+        "other.wav,9600,-18,snare\n"
+        "\"drums,01.wav\",14400,-24,ghost\n"
+    };
+    const auto recordings = readRealKitManifest(manifest, "/tmp/real-kit");
+    REQUIRE(recordings.size() == 2);
+    REQUIRE(recordings[0].relativeAudioPath == "drums,01.wav");
+    REQUIRE(recordings[0].audioPath == "/tmp/real-kit/drums,01.wav");
+    REQUIRE(recordings[0].annotations.size() == 2);
+    REQUIRE(recordings[0].annotations[0].onsetSample == 4800);
+    REQUIRE(recordings[0].annotations[0].kind == HitKind::kick);
+    REQUIRE(recordings[0].annotations[1].kind == HitKind::ghost);
+    REQUIRE(recordings[1].relativeAudioPath == "other.wav");
+    REQUIRE(recordings[1].annotations[0].kind == HitKind::snare);
+
+    std::istringstream outside { "file,onset_sample,peak_dbfs,kind\n../outside.wav,1,-12,kick\n" };
+    REQUIRE_THROWS(readRealKitManifest(outside, "/tmp/real-kit"));
+    std::istringstream badKind { "file,onset_sample,peak_dbfs,kind\nfile.wav,1,-12,unknown\n" };
+    REQUIRE_THROWS(readRealKitManifest(badKind, "/tmp/real-kit"));
 }
 
 TEST_CASE("Harness rejects invalid input and handles empty audio and silence")
