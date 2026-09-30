@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.4.0
+
+- Gain stays on the hit for the application window (default 120 ms), separate from the 30 ms measurement.
+- The editor leads with Smoothing. Target level is shown only in Manual, and Window sets how long a hit keeps its coefficient.
+- The scope uses a fixed scale and marks each hit's level before and after. A spread readout compares recent hits.
+
+## 0.1.0
 
 - C++20/CMake Debug/Release scaffold with a standalone DSP library and Catch2 tests.
 - Deterministic synthetic hits with known onsets and peak levels.

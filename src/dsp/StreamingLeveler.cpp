@@ -31,6 +31,7 @@ void StreamingLeveler::prepare(double sampleRate, std::size_t numChannels)
         throw std::invalid_argument("Streaming leveler supports 8-192 kHz mono or stereo");
 
     channels = numChannels;
+    rate = sampleRate;
     const LatencyBudget budget { 4.0, 50.0, 2.0, sampleRate };
     latency = static_cast<std::size_t>(budget.requiredSamples());
     attackSamples = msToSamples(attackMs, sampleRate);
@@ -53,6 +54,7 @@ void StreamingLeveler::reset(std::uint64_t epoch) noexcept
     targetWrite = 0;
     processedSamples = 0;
     lastGainDbValue = 0.0f;
+    gainDecisionCount = 0;
     late = 0;
     dropped = 0;
 }
@@ -116,7 +118,8 @@ void StreamingLeveler::schedule(const HitMeasurement& measurement,
                                       std::max(0.0f, parameters.maxBoostDb));
     const auto slot = findScheduleSlot();
     const auto onset = measurement.event.onsetSample;
-    const auto holdLength = static_cast<std::int64_t>(std::max<std::size_t>(1, measurement.windowSamples));
+    const auto windowMs = std::clamp(parameters.windowMs, 1.0f, 2000.0f);
+    const auto holdLength = static_cast<std::int64_t>(msToSamples(windowMs, rate));
     scheduled[slot] = { std::max<std::int64_t>(0, onset - static_cast<std::int64_t>(attackSamples)),
                         onset,
                         onset + holdLength,
@@ -124,6 +127,8 @@ void StreamingLeveler::schedule(const HitMeasurement& measurement,
                         toLinear(limitedDb),
                         true };
     lastGainDbValue = limitedDb;
+    if (gainDecisionCount < gainDecisions.size())
+        gainDecisions[gainDecisionCount++] = { onset, measuredDb, limitedDb };
 
     if (parameters.automaticTarget && measuredDb > silenceDb)
     {
@@ -183,6 +188,7 @@ std::size_t StreamingLeveler::process(const float* const* input,
 {
     assert(channels == 1 || channels == 2);
     assert(input != nullptr && output != nullptr);
+    gainDecisionCount = 0;
     const auto measurementsWritten = analyzer.process(input, output, numSamples, events, measurements);
     for (std::size_t index = 0; index < measurementsWritten; ++index)
     {

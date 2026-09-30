@@ -10,7 +10,7 @@ make CONFIG=debug app    # Debug-вариант, тоже с подписью
 make release-dmg         # то же + notarization и stapling
 ```
 
-Результат находится в `dist/Beat Volumetric 0.1.0.dmg`. Внутри:
+Результат находится в `dist/Beat Volumetric <версия>.dmg`, версия берётся из `VERSION`. Внутри:
 
 ```text
 BeatVolumetricDev.app

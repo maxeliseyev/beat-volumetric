@@ -224,3 +224,73 @@ TEST_CASE("Streaming leveler applies one common measured gain independent of hos
     REQUIRE(single.output[1][source + latency] / fixture.audio.channels[1][source]
             == Catch::Approx(expectedGain).margin(1.0e-5));
 }
+
+float plateauRatio(const std::vector<float>& input,
+                   const std::vector<float>& output,
+                   std::int64_t begin,
+                   std::int64_t end,
+                   std::size_t latency)
+{
+    auto best = static_cast<std::size_t>(begin);
+    auto bestMagnitude = 0.0f;
+    for (auto sample = begin; sample < end; ++sample)
+    {
+        const auto magnitude = std::abs(input[static_cast<std::size_t>(sample)]);
+        if (magnitude > bestMagnitude)
+        {
+            bestMagnitude = magnitude;
+            best = static_cast<std::size_t>(sample);
+        }
+    }
+    REQUIRE(bestMagnitude > 1.0e-4f);
+    return output[best + latency] / input[best];
+}
+
+TEST_CASE("Application window outlasts the measurement horizon and then releases")
+{
+    const auto fixture = beat::leveler::harness::makeSynthetic(48000, 1);
+    const LevelerParameters held { 1.0f, false, -12.0f, 1.0f, 24.0f, 24.0f, 120.0f };
+    const auto single = renderLeveler(fixture.audio.channels, fixture.audio.sampleRate, held, { 1 });
+    const auto varied = renderLeveler(fixture.audio.channels, fixture.audio.sampleRate,
+                                      held, { 127, 1, 511 });
+    REQUIRE(single.output == varied.output);
+    REQUIRE(single.measurements.size() == fixture.hits.size());
+
+    const auto& measurement = single.measurements.front();
+    const auto onset = measurement.event.onsetSample;
+    const auto sampleRate = fixture.audio.sampleRate;
+    const auto ms = [&](double milliseconds)
+    {
+        return static_cast<std::int64_t>(std::llround(milliseconds * 0.001 * sampleRate));
+    };
+    REQUIRE(std::abs(onset - fixture.hits.front().onsetSample) <= ms(1.0));
+    REQUIRE(measurement.windowSamples < static_cast<std::size_t>(ms(35.0)));
+
+    StreamingLeveler reference;
+    reference.prepare(sampleRate, 1);
+    const auto latency = reference.latencySamples();
+    const auto measuredDb = 20.0f * std::log10(measurement.weightedRms);
+    const auto requestedDb = std::clamp((held.targetDbfs - measuredDb) * held.strength,
+                                        -held.maxCutDb, held.maxBoostDb);
+    const auto expectedGain = std::pow(10.0f, requestedDb / 20.0f);
+    REQUIRE(std::abs(requestedDb) > 1.0f);
+
+    const auto pastMeasurement = plateauRatio(fixture.audio.channels[0], single.output[0],
+                                              onset + ms(35.0), onset + ms(50.0), latency);
+    REQUIRE(pastMeasurement == Catch::Approx(expectedGain).margin(1.0e-4));
+
+    const LevelerParameters brief { 1.0f, false, -12.0f, 1.0f, 24.0f, 24.0f, 20.0f };
+    const auto releasedEarly = renderLeveler(fixture.audio.channels, sampleRate, brief, { 64 });
+    const auto afterBriefWindow = plateauRatio(fixture.audio.channels[0], releasedEarly.output[0],
+                                               onset + ms(35.0), onset + ms(50.0), latency);
+    REQUIRE(afterBriefWindow == Catch::Approx(1.0f).margin(1.0e-4));
+
+    const LevelerParameters mid { 1.0f, false, -12.0f, 1.0f, 24.0f, 24.0f, 40.0f };
+    const auto returns = renderLeveler(fixture.audio.channels, sampleRate, mid, { 64 });
+    const auto onPlateau = plateauRatio(fixture.audio.channels[0], returns.output[0],
+                                        onset + ms(10.0), onset + ms(25.0), latency);
+    const auto afterReturn = plateauRatio(fixture.audio.channels[0], returns.output[0],
+                                         onset + ms(55.0), onset + ms(68.0), latency);
+    REQUIRE(onPlateau == Catch::Approx(expectedGain).margin(1.0e-4));
+    REQUIRE(afterReturn == Catch::Approx(1.0f).margin(1.0e-4));
+}
