@@ -39,7 +39,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout BeatVolumetricAudioProcessor
         {
             return juce::jlimit(0.0f, 1.0f, text.getFloatValue() / 100.0f);
         });
-    result.push_back(std::make_unique<juce::AudioParameterFloat>("strength", "Smoothing",
+    result.push_back(std::make_unique<juce::AudioParameterFloat>("strength", "Strength",
         juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f, percent));
     result.push_back(std::make_unique<juce::AudioParameterChoice>("target_mode", "Target",
         juce::StringArray { "Auto", "Manual" }, 0));
@@ -68,7 +68,6 @@ void BeatVolumetricAudioProcessor::prepareToPlay(double sampleRate, int)
 {
     leveler.prepare(sampleRate, static_cast<std::size_t>(getTotalNumInputChannels()));
     leveler.reset();
-    scope.prepare(static_cast<std::size_t>(sampleRate));
     hitTelemetry.clear();
     setLatencySamples(static_cast<int>(leveler.latencySamples()));
 }
@@ -90,16 +89,8 @@ void BeatVolumetricAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 {
     juce::ignoreUnused(midi);
     juce::ScopedNoDenormals noDenormals;
-    const auto channels = static_cast<std::size_t>(getTotalNumInputChannels());
     for (int channel = getTotalNumInputChannels(); channel < getTotalNumOutputChannels(); ++channel)
         buffer.clear(channel, 0, buffer.getNumSamples());
-    std::array<float, 2> scopeSamples {};
-    for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
-    {
-        for (std::size_t channel = 0; channel < channels; ++channel)
-            scopeSamples[channel] = buffer.getReadPointer(static_cast<int>(channel))[sample];
-        scope.push(scopeSamples.data(), channels);
-    }
     const beat::leveler::LevelerParameters levelerParameters {
         strengthParameter != nullptr ? strengthParameter->load(std::memory_order_relaxed) : 0.5f,
         targetModeParameter == nullptr || targetModeParameter->load(std::memory_order_relaxed) < 0.5f,
@@ -125,10 +116,9 @@ void BeatVolumetricAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     for (std::size_t index = 0; index < measurementsWritten; ++index)
         lastPeak.store(db(measurements[index].peak), std::memory_order_relaxed);
     for (const auto& decision : leveler.decisions())
-        hitTelemetry.push(decision.onsetSample, decision.measuredDb, decision.gainDb);
+        hitTelemetry.push(decision.onsetSample, decision.measuredDb, decision.gainDb, decision.targetDb);
     gain.store(leveler.lastGainDb(), std::memory_order_relaxed);
     events.fill({});
-    juce::ignoreUnused(channels);
 }
 
 juce::AudioProcessorEditor* BeatVolumetricAudioProcessor::createEditor()

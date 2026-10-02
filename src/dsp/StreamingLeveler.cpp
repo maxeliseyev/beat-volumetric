@@ -128,7 +128,7 @@ void StreamingLeveler::schedule(const HitMeasurement& measurement,
                         true };
     lastGainDbValue = limitedDb;
     if (gainDecisionCount < gainDecisions.size())
-        gainDecisions[gainDecisionCount++] = { onset, measuredDb, limitedDb };
+        gainDecisions[gainDecisionCount++] = { onset, measuredDb, limitedDb, target };
 
     if (parameters.automaticTarget && measuredDb > silenceDb)
     {
