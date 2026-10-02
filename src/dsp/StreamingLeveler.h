@@ -19,6 +19,16 @@ struct LevelerParameters
     float mix = 1.0f;
     float maxBoostDb = 6.0f;
     float maxCutDb = 12.0f;
+    // How long the hit keeps its coefficient after the onset. This is the
+    // application window, not the meter's 30 ms measurement horizon.
+    float windowMs = 120.0f;
+};
+
+struct GainDecision
+{
+    std::int64_t onsetSample = -1;
+    float measuredDb = -240.0f;
+    float gainDb = 0.0f;
 };
 
 // Causal beat leveler with a fixed lookahead. Detection and measurement happen
@@ -41,6 +51,10 @@ public:
     float lastGainDb() const noexcept { return lastGainDbValue; }
     std::uint64_t lateEvents() const noexcept { return late; }
     std::uint64_t droppedSchedules() const noexcept { return dropped; }
+    std::span<const GainDecision> decisions() const noexcept
+    {
+        return { gainDecisions.data(), gainDecisionCount };
+    }
 
 private:
     struct ScheduledGain
@@ -62,6 +76,7 @@ private:
     std::size_t findScheduleSlot() noexcept;
 
     std::size_t channels = 0;
+    double rate = 48000.0;
     std::size_t latency = 0;
     std::size_t attackSamples = 0;
     std::size_t releaseSamples = 0;
@@ -74,6 +89,8 @@ private:
     std::size_t targetCount = 0;
     std::size_t targetWrite = 0;
     float lastGainDbValue = 0.0f;
+    std::array<GainDecision, 32> gainDecisions {};
+    std::size_t gainDecisionCount = 0;
     std::uint64_t late = 0;
     std::uint64_t dropped = 0;
 };

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "dsp/StreamingLeveler.h"
+#include "HitTelemetry.h"
 #include "ScopeRing.h"
 
 #include <array>
@@ -41,6 +42,10 @@ public:
     void copyScope(float* destination, std::size_t count) const noexcept { scope.copyLast(destination, count); }
     std::int64_t scopeSample() const noexcept { return scope.currentSample(); }
     std::size_t scopeLength() const noexcept { return scope.length(); }
+    std::size_t copyHits(HitTelemetrySample* destination, std::size_t count) const noexcept
+    {
+        return hitTelemetry.copy(destination, count);
+    }
     std::int64_t lastOnsetSample() const noexcept { return onsetSample.load(); }
 
 private:
@@ -57,9 +62,11 @@ private:
     std::atomic<float> confidence { 0.0f };
     std::atomic<std::int64_t> onsetSample { -1 };
     ScopeRing scope;
+    HitTelemetry hitTelemetry;
     std::atomic<float>* strengthParameter = nullptr;
     std::atomic<float>* targetModeParameter = nullptr;
     std::atomic<float>* targetDbfsParameter = nullptr;
+    std::atomic<float>* windowParameter = nullptr;
     std::atomic<float>* mixParameter = nullptr;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BeatVolumetricAudioProcessor)
 };
