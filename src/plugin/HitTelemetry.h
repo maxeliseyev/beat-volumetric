@@ -14,6 +14,7 @@ struct HitTelemetrySample
     std::int64_t onsetSample = -1;
     float measuredDb = -240.0f;
     float gainDb = 0.0f;
+    float targetDb = -240.0f;
 };
 
 class HitTelemetry
@@ -25,17 +26,19 @@ public:
         {
             slot.measuredBits.store(0, std::memory_order_relaxed);
             slot.gainBits.store(0, std::memory_order_relaxed);
+            slot.targetBits.store(0, std::memory_order_relaxed);
             slot.onset.store(-1, std::memory_order_relaxed);
         }
         write.store(0, std::memory_order_relaxed);
     }
 
-    void push(std::int64_t onsetSample, float measuredDb, float gainDb) noexcept
+    void push(std::int64_t onsetSample, float measuredDb, float gainDb, float targetDb) noexcept
     {
         const auto index = write.fetch_add(1, std::memory_order_relaxed) % slots.size();
         auto& slot = slots[index];
         slot.measuredBits.store(bits(measuredDb), std::memory_order_relaxed);
         slot.gainBits.store(bits(gainDb), std::memory_order_relaxed);
+        slot.targetBits.store(bits(targetDb), std::memory_order_relaxed);
         slot.onset.store(onsetSample, std::memory_order_release);
     }
 
@@ -53,7 +56,8 @@ public:
             destination[written++] = {
                 onsetSample,
                 number(slot.measuredBits.load(std::memory_order_relaxed)),
-                number(slot.gainBits.load(std::memory_order_relaxed))
+                number(slot.gainBits.load(std::memory_order_relaxed)),
+                number(slot.targetBits.load(std::memory_order_relaxed))
             };
             if (written == capacity)
                 break;
@@ -67,6 +71,7 @@ private:
         std::atomic<std::int64_t> onset { -1 };
         std::atomic<std::uint32_t> measuredBits { 0 };
         std::atomic<std::uint32_t> gainBits { 0 };
+        std::atomic<std::uint32_t> targetBits { 0 };
     };
 
     static std::uint32_t bits(float value) noexcept

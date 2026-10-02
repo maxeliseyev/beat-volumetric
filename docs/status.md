@@ -1,37 +1,37 @@
 # Текущий статус
 
-Обновлено: 2026-09-30.
+Обновлено: 2026-10-02.
 
 ## Branch
 
-`feat/application-window-and-hit-scope`, от `main` (`a3ea88b`, PR #5).
-VERSION 0.4.0.
+`feat/faders-and-gain-history`, от `feat/application-window-and-hit-scope`
+(`5b212b4`, PR #6). VERSION 0.5.0.
 
 ## Now
 
-- C++20/CMake Debug/Release, Makefile, VERSION 0.4.0 и changelog.
+- C++20/CMake Debug/Release, Makefile, VERSION 0.5.0 и changelog.
 - Автономный `beat_leveler_dsp`: потоковые spectral-flux detector, level meter и
   `StreamingLeveler` для mono/stereo с общей 56 ms lookahead latency.
 - Синтетические удары с эталонными onset/peak; WAV runner и CSV измеренного выхода.
 - Catch2-тесты DSP/стенда и интеграционный CLI-прогон без GUI.
 - Потоковый контракт событий, latency-бюджет, кольцевой delay line и базовый gain law
   реализованы без выделений в audio callback.
-- Development AU/VST3/Standalone подключены к DSP через JUCE. Главная ручка —
-  Smoothing. Target level виден только в Manual. Window задаёт, сколько удар
-  держит коэффициент (по умолчанию 120 мс, отдельно от 30 мс измерения).
-  Осциллограф показывает вход на фиксированной шкале и уровень удара до/после;
-  рядом число разброса последних ударов.
+- Development AU/VST3/Standalone подключены к DSP через JUCE. Strength и Level —
+  вертикальные фейдеры. В Auto фейдер Level показывает цель (середину недавних
+  ударов) и не двигается вручную. Window задаёт, сколько удар держит коэффициент
+  (по умолчанию 120 мс, отдельно от 30 мс измерения). Прибор — удержанная история
+  изменения усиления по ударам, не бегущая волна входа. Рядом число разброса.
 - Добавлен `scripts/package-macos.sh`: Developer ID signing, Hardened Runtime,
   notarization/stapling вложенных bundles и подписанный DMG; Makefile получил
   `app` и `release-dmg`.
 
 ## Next
 
-Повторно прослушать ту же запись в Reaper/Logic со свежим bundle: Smoothing 50% и
-100%, Window 40 мс и 120 мс, Auto. На приборе у удара должны разъехаться точка
-«before» и кольцо «after», число Spread — уменьшиться, а тело удара должно стать
-тише или громче на слух. Затем плотные раскаты и перегрузка. Подавление транзиентов
-отдельным режимом не добавлять: это смена огибающей внутри удара.
+На той же записи открыть `dist/Beat Volumetric 0.5.0.dmg` и проверить Auto:
+фейдер Level сам встаёт на цель, строка называет её в dB, столбики gain change
+остаются на экране. Нулевые столбики значат, что удары уже на этой середине.
+Затем Strength 50% и 100%, Window 40 мс и 120 мс. Подавление транзиентов
+отдельным режимом не добавлять.
 
 ## Проверено
 
@@ -42,6 +42,15 @@ VERSION 0.4.0.
   держится после 30 мс измерения при окне 120 мс, на том же месте равен единице при
   окне 20 мс и возвращается к единице после окна 40 мс. Debug пересобрал AU, VST3
   и Standalone. Повторное прослушивание в DAW ещё не сделано.
+- После замены осциллографа: фейдеры Strength/Level, цель Auto на отдельном
+  неперетаскиваемом фейдере, история gain change вместо бегущей волны входа.
+  Повторное прослушивание в DAW ещё не сделано.
+- `rtk proxy make release-dmg` для 0.5.0: Developer ID Application
+  Maxim Eliseyev (PK2473XF3P). Notary принял архив бандлов
+  `7376927a-2d5b-4f7b-acc1-88f23c1bc63e` и DMG `2d778515-550c-4316-acf1-5c1e4092a8ce`.
+  Stapler и Gatekeeper: `source=Notarized Developer ID` для app и DMG.
+  Файл `dist/Beat Volumetric 0.5.0.dmg` (9.3 MB). В бандле CFBundleShortVersionString
+  0.5.0. В DAW эта сборка ещё не слушалась.
 
 - macOS, AppleClang 21.0.0, CMake 4.1.2, Ninja 1.13.1.
 - `rtk proxy make debug`: DSP/Catch2 и интеграционный CLI — 2/2 CTest-прогона.
@@ -85,10 +94,10 @@ VERSION 0.4.0.
 
 ## Resume
 
-1. В DAW загрузить свежий `build/debug/src/plugin/BeatVolumetric_artefacts/Debug/VST3/
-   BeatVolumetricDev.vst3` (или AU) на той же drum-записи. Сравнить Window 40 мс
-   и 120 мс при Smoothing 100%: короткое окно почти не слышно, длинное меняет тело.
-   Проверить, что в Auto ручка Level скрыта, а Spread и точки before/after двигаются.
+1. Инженеру отдать `dist/Beat Volumetric 0.5.0.dmg`, не 0.4.0. На той же
+   drum-записи в Auto фейдер Level сам встаёт на цель, строка называет её в dB,
+   столбики gain change остаются. Нулевой столбик значит, что удар уже на этой
+   середине. Сравнить Strength 50% и 100%.
 2. Получить Developer ID Application, Team ID и app-specific password; сохранить
    credentials профилем `beat-volumetric`, затем проверить `make app` и
    `make release-dmg` на отдельном Mac.

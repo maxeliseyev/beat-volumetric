@@ -2,7 +2,6 @@
 
 #include "dsp/StreamingLeveler.h"
 #include "HitTelemetry.h"
-#include "ScopeRing.h"
 
 #include <array>
 #include <atomic>
@@ -39,9 +38,6 @@ public:
     float lastPeakDbfs() const noexcept { return lastPeak.load(); }
     float lastGainDb() const noexcept { return gain.load(); }
     float lastConfidence() const noexcept { return confidence.load(); }
-    void copyScope(float* destination, std::size_t count) const noexcept { scope.copyLast(destination, count); }
-    std::int64_t scopeSample() const noexcept { return scope.currentSample(); }
-    std::size_t scopeLength() const noexcept { return scope.length(); }
     std::size_t copyHits(HitTelemetrySample* destination, std::size_t count) const noexcept
     {
         return hitTelemetry.copy(destination, count);
@@ -61,7 +57,6 @@ private:
     std::atomic<float> gain { 0.0f };
     std::atomic<float> confidence { 0.0f };
     std::atomic<std::int64_t> onsetSample { -1 };
-    ScopeRing scope;
     HitTelemetry hitTelemetry;
     std::atomic<float>* strengthParameter = nullptr;
     std::atomic<float>* targetModeParameter = nullptr;
