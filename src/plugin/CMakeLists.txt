@@ -17,7 +17,7 @@ juce_add_plugin(BeatVolumetric
     VST3_CATEGORIES Fx
     AU_MAIN_TYPE kAudioUnitType_Effect)
 
-target_sources(BeatVolumetric PRIVATE PluginProcessor.cpp PluginEditor.cpp WaveformScope.cpp)
+target_sources(BeatVolumetric PRIVATE PluginProcessor.cpp PluginEditor.cpp GainHistory.cpp)
 target_link_libraries(BeatVolumetric
     PRIVATE beat_leveler_dsp juce::juce_audio_utils juce::juce_gui_basics
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)

@@ -29,6 +29,7 @@ struct GainDecision
     std::int64_t onsetSample = -1;
     float measuredDb = -240.0f;
     float gainDb = 0.0f;
+    float targetDb = -240.0f;
 };
 
 // Causal beat leveler with a fixed lookahead. Detection and measurement happen

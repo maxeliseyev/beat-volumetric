@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+- Strength and Level are vertical faders. In Auto the Level fader shows the followed target and does not move by hand.
+- The meter is a held gain-change history. Each bar is one hit and stays until newer hits replace it.
+
 ## 0.4.0
 
 - Gain stays on the hit for the application window (default 120 ms), separate from the 30 ms measurement.

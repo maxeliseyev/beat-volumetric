@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -30,46 +31,66 @@ BeatVolumetricAudioProcessorEditor::BeatVolumetricAudioProcessorEditor(BeatVolum
     : AudioProcessorEditor(&value), volumetricProcessor(value)
 {
     title.setText("Beat Volumetric", juce::dontSendNotification);
-    status.setText("Realtime leveler  ·  56 ms lookahead", juce::dontSendNotification);
     title.setFont(juce::FontOptions(24.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, juce::Colours::white);
     status.setColour(juce::Label::textColourId, juce::Colour(0xffa7b0bd));
-    for (auto* label : { &strengthLabel, &targetLabel, &levelLabel, &windowLabel, &mixLabel, &waveformLabel })
+    for (auto* label : { &strengthLabel, &levelLabel, &targetLabel, &windowLabel, &mixLabel, &historyLabel })
     {
         label->setFont(juce::FontOptions(12.0f, juce::Font::bold));
         label->setColour(juce::Label::textColourId, juce::Colour(0xffa7b0bd));
         label->setJustificationType(juce::Justification::centred);
     }
-    strengthLabel.setText("SMOOTHING", juce::dontSendNotification);
+    strengthLabel.setText("STRENGTH", juce::dontSendNotification);
+    levelLabel.setText("LEVEL", juce::dontSendNotification);
     targetLabel.setText("TARGET", juce::dontSendNotification);
     targetLabel.setJustificationType(juce::Justification::centredLeft);
-    levelLabel.setText("LEVEL", juce::dontSendNotification);
     windowLabel.setText("WINDOW", juce::dontSendNotification);
+    windowLabel.setJustificationType(juce::Justification::centredLeft);
     mixLabel.setText("DRY / WET", juce::dontSendNotification);
-    waveformLabel.setText("INPUT  ·  HIT LEVEL BEFORE AND AFTER", juce::dontSendNotification);
-    waveformLabel.setJustificationType(juce::Justification::centredLeft);
+    mixLabel.setJustificationType(juce::Justification::centredLeft);
+    historyLabel.setText("GAIN CHANGE  ·  UP IS BOOST, DOWN IS CUT, BARS STAY", juce::dontSendNotification);
+    historyLabel.setJustificationType(juce::Justification::centredLeft);
     for (auto* label : { &hits, &peak, &spread, &gain })
     {
         label->setFont(juce::FontOptions(14.0f, juce::Font::bold));
         label->setColour(juce::Label::textColourId, juce::Colour(0xff6dd3b5));
     }
+
     targetMode.addItem("Auto", 1);
     targetMode.addItem("Manual", 2);
-    for (auto* slider : { &strength, &targetLevel, &window, &mix })
+    for (auto* slider : { &strength, &targetLevel, &autoLevel })
     {
-        slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-        slider->setTextBoxStyle(juce::Slider::TextBoxBelow, false, 84, 20);
+        slider->setSliderStyle(juce::Slider::LinearVertical);
+        slider->setTextBoxStyle(juce::Slider::TextBoxBelow, false, 76, 20);
         addAndMakeVisible(*slider);
+    }
+    for (auto* slider : { &window, &mix })
+    {
+        slider->setSliderStyle(juce::Slider::LinearHorizontal);
+        slider->setTextBoxStyle(juce::Slider::TextBoxRight, false, 68, 20);
+        addAndMakeVisible(*slider);
+    }
+    autoLevel.setRange(-80.0, 0.0, 0.1);
+    autoLevel.setTextValueSuffix(" dB");
+    autoLevel.setNumDecimalPlacesToDisplay(1);
+    autoLevel.setValue(-12.0, juce::dontSendNotification);
+    // A disabled slider greys out and reads as bypass. Keep the paint live and ignore the mouse.
+    autoLevel.setTextBoxIsEditable(false);
+    autoLevel.setInterceptsMouseClicks(false, false);
+    for (auto* slider : { &strength, &targetLevel, &autoLevel })
+    {
+        slider->setColour(juce::Slider::backgroundColourId, juce::Colour(0xff222831));
+        slider->setColour(juce::Slider::trackColourId, juce::Colour(0xff6dd3b5));
+        slider->setColour(juce::Slider::thumbColourId, juce::Colour(0xfff4f7fb));
     }
     strength.setNumDecimalPlacesToDisplay(0);
     targetLevel.setNumDecimalPlacesToDisplay(1);
-    targetLevel.setTextValueSuffix(" dB");
     window.setNumDecimalPlacesToDisplay(0);
     mix.setNumDecimalPlacesToDisplay(0);
     addAndMakeVisible(targetMode);
-    addAndMakeVisible(scope);
-    for (auto* label : { &title, &status, &strengthLabel, &targetLabel, &levelLabel, &windowLabel,
-                         &mixLabel, &waveformLabel, &hits, &peak, &spread, &gain })
+    addAndMakeVisible(history);
+    for (auto* label : { &title, &status, &strengthLabel, &levelLabel, &targetLabel, &windowLabel,
+                         &mixLabel, &historyLabel, &hits, &peak, &spread, &gain })
         addAndMakeVisible(*label);
 
     auto& state = volumetricProcessor.state();
@@ -80,15 +101,20 @@ BeatVolumetricAudioProcessorEditor::BeatVolumetricAudioProcessorEditor(BeatVolum
     targetModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(state, "target_mode", targetMode);
     targetMode.onChange = [this] { showManualTarget(targetMode.getSelectedId() == 2); };
     showManualTarget(targetMode.getSelectedId() == 2);
-    scopeHits.reserve(16);
-    setSize(740, 700);
+    historyBars.reserve(16);
+    setSize(760, 680);
     startTimerHz(20);
 }
 
 void BeatVolumetricAudioProcessorEditor::showManualTarget(bool manual)
 {
-    levelLabel.setVisible(manual);
+    levelLabel.setText(manual ? "LEVEL" : "AUTO", juce::dontSendNotification);
     targetLevel.setVisible(manual);
+    autoLevel.setVisible(!manual);
+    status.setText(manual
+                       ? "Level sets how loud every hit should be."
+                       : "Auto aims at the middle of recent hits.",
+                   juce::dontSendNotification);
     resized();
 }
 
@@ -105,34 +131,34 @@ void BeatVolumetricAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds().reduced(28);
     title.setBounds(area.removeFromTop(32));
-    status.setBounds(area.removeFromTop(24));
-    area.removeFromTop(8);
+    status.setBounds(area.removeFromTop(36));
+    area.removeFromTop(6);
 
-    auto controls = area.removeFromTop(280);
-    auto hero = controls.removeFromLeft(230);
-    strengthLabel.setBounds(hero.removeFromTop(22));
-    strength.setBounds(hero.reduced(4, 0));
+    auto controls = area.removeFromTop(250);
+    auto strengthColumn = controls.removeFromLeft(96);
+    strengthLabel.setBounds(strengthColumn.removeFromTop(18));
+    strength.setBounds(strengthColumn.reduced(4, 0));
+    controls.removeFromLeft(8);
+    auto levelColumn = controls.removeFromLeft(96);
+    levelLabel.setBounds(levelColumn.removeFromTop(18));
+    targetLevel.setBounds(levelColumn.reduced(4, 0));
+    autoLevel.setBounds(levelColumn.reduced(4, 0));
 
-    controls.removeFromLeft(28);
-    auto mode = controls.removeFromTop(30);
-    targetLabel.setBounds(mode.removeFromLeft(78));
-    targetMode.setBounds(mode.removeFromLeft(150).reduced(0, 1));
+    controls.removeFromLeft(24);
+    auto mode = controls.removeFromTop(28);
+    targetLabel.setBounds(mode.removeFromLeft(72));
+    targetMode.setBounds(mode.removeFromLeft(160).reduced(0, 1));
+    controls.removeFromTop(28);
 
-    controls.removeFromTop(18);
-    auto knobs = controls.removeFromTop(168);
-    const auto manual = targetLevel.isVisible();
-    const auto columnWidth = manual ? 128 : 170;
-    auto place = [&](juce::Label& label, juce::Slider& slider)
+    auto placeSlider = [&](juce::Label& label, juce::Slider& slider)
     {
-        auto column = knobs.removeFromLeft(columnWidth);
-        knobs.removeFromLeft(12);
-        label.setBounds(column.removeFromTop(18));
-        slider.setBounds(column);
+        auto row = controls.removeFromTop(28);
+        label.setBounds(row.removeFromLeft(84));
+        slider.setBounds(row);
+        controls.removeFromTop(10);
     };
-    if (manual)
-        place(levelLabel, targetLevel);
-    place(windowLabel, window);
-    place(mixLabel, mix);
+    placeSlider(windowLabel, window);
+    placeSlider(mixLabel, mix);
 
     auto telemetry = area.removeFromBottom(36);
     hits.setBounds(telemetry.removeFromLeft(120));
@@ -140,39 +166,47 @@ void BeatVolumetricAudioProcessorEditor::resized()
     gain.setBounds(telemetry.removeFromRight(130));
     spread.setBounds(telemetry);
 
-    waveformLabel.setBounds(area.removeFromTop(22));
-    scope.setBounds(area.reduced(0, 2));
+    historyLabel.setBounds(area.removeFromTop(22));
+    history.setBounds(area.reduced(0, 2));
 }
 
 void BeatVolumetricAudioProcessorEditor::timerCallback()
 {
-    const auto length = volumetricProcessor.scopeLength();
-    if (scopeScratch.size() != length)
-        scopeScratch.assign(length, 0.0f);
-    if (!scopeScratch.empty())
-        volumetricProcessor.copyScope(scopeScratch.data(), scopeScratch.size());
-    scope.setWaveform(scopeScratch.data(), scopeScratch.size());
-
     std::array<HitTelemetrySample, 16> marks {};
     const auto markCount = volumetricProcessor.copyHits(marks.data(), marks.size());
-    const auto end = volumetricProcessor.scopeSample();
-    const auto windowSamples = static_cast<std::int64_t>(length);
+    std::sort(marks.begin(), marks.begin() + static_cast<std::ptrdiff_t>(markCount),
+              [](const HitTelemetrySample& left, const HitTelemetrySample& right)
+              {
+                  return left.onsetSample < right.onsetSample;
+              });
+
     std::array<float, 16> before {};
     std::array<float, 16> after {};
-    scopeHits.clear();
+    historyBars.clear();
     for (std::size_t index = 0; index < markCount; ++index)
     {
-        const auto& mark = marks[index];
-        before[index] = mark.measuredDb;
-        after[index] = mark.measuredDb + mark.gainDb;
-        if (windowSamples <= 0)
-            continue;
-        const auto position = static_cast<float>(mark.onsetSample - (end - windowSamples))
-                              / static_cast<float>(windowSamples);
-        if (position >= 0.0f && position <= 1.0f)
-            scopeHits.push_back({ position, mark.measuredDb, mark.measuredDb + mark.gainDb });
+        before[index] = marks[index].measuredDb;
+        after[index] = marks[index].measuredDb + marks[index].gainDb;
+        historyBars.push_back({ marks[index].gainDb });
     }
-    scope.setHits(scopeHits.data(), scopeHits.size());
+    history.setBars(historyBars.data(), historyBars.size());
+
+    if (!targetLevel.isVisible())
+    {
+        if (markCount > 0)
+        {
+            const auto target = marks[markCount - 1].targetDb;
+            autoLevel.setValue(target, juce::dontSendNotification);
+            status.setText("Auto aims at " + juce::String(target, 1)
+                               + " dB, the middle of recent hits.",
+                           juce::dontSendNotification);
+        }
+        else
+        {
+            status.setText("Auto aims at the middle of recent hits.",
+                           juce::dontSendNotification);
+        }
+    }
 
     hits.setText("Hits  " + juce::String(static_cast<juce::int64>(volumetricProcessor.detectedHits())),
                  juce::dontSendNotification);
