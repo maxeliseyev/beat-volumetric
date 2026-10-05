@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+
+- Window is replaced by Hold (how long a hit keeps its corrected level) and Release (how long the level glides back to unity, 1-200 ms, default 8 ms). Release has a Linear or Curved (raised-cosine knee) shape. The `window_ms` parameter ID is retired, not reused; old sessions fall back to the defaults.
+- The scope shows INPUT and OUTPUT as two separate panels. Output is yellow so it reads as the result of the leveling.
+
 ## 0.6.0
 
 - The meter is a scroll-locked oscilloscope. The top lane is the input and the bottom lane is the output, shaded across two bars when the host reports tempo.

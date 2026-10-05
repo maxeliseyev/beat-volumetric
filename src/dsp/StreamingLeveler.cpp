@@ -16,7 +16,6 @@ namespace
 
 constexpr float silenceDb = -240.0f;
 constexpr float attackMs = 2.0f;
-constexpr float releaseMs = 8.0f;
 
 std::size_t msToSamples(double milliseconds, double sampleRate)
 {
@@ -35,7 +34,6 @@ void StreamingLeveler::prepare(double sampleRate, std::size_t numChannels)
     const LatencyBudget budget { 4.0, 50.0, 2.0, sampleRate };
     latency = static_cast<std::size_t>(budget.requiredSamples());
     attackSamples = msToSamples(attackMs, sampleRate);
-    releaseSamples = msToSamples(releaseMs, sampleRate);
     analyzer.prepare(sampleRate, numChannels);
     delayLine.prepare(numChannels, latency + 1);
     delayLine.setDelay(latency);
@@ -118,13 +116,16 @@ void StreamingLeveler::schedule(const HitMeasurement& measurement,
                                       std::max(0.0f, parameters.maxBoostDb));
     const auto slot = findScheduleSlot();
     const auto onset = measurement.event.onsetSample;
-    const auto windowMs = std::clamp(parameters.windowMs, 1.0f, 2000.0f);
-    const auto holdLength = static_cast<std::int64_t>(msToSamples(windowMs, rate));
+    const auto holdLength = static_cast<std::int64_t>(
+        msToSamples(std::clamp(parameters.holdMs, 1.0f, 2000.0f), rate));
+    const auto releaseLength = static_cast<std::int64_t>(
+        msToSamples(std::clamp(parameters.releaseMs, 1.0f, 2000.0f), rate));
     scheduled[slot] = { std::max<std::int64_t>(0, onset - static_cast<std::int64_t>(attackSamples)),
                         onset,
                         onset + holdLength,
-                        onset + holdLength + static_cast<std::int64_t>(releaseSamples),
+                        onset + holdLength + releaseLength,
                         toLinear(limitedDb),
+                        parameters.releaseCurve,
                         true };
     lastGainDbValue = limitedDb;
     if (gainDecisionCount < gainDecisions.size())
@@ -176,7 +177,10 @@ float StreamingLeveler::gainAt(std::int64_t sourceSample) noexcept
     const auto duration = std::max<std::int64_t>(1, item.end - item.holdEnd);
     const auto position = static_cast<float>(sourceSample - item.holdEnd)
                           / static_cast<float>(duration);
-    return item.gain + (1.0f - item.gain) * std::clamp(position, 0.0f, 1.0f);
+    auto shaped = std::clamp(position, 0.0f, 1.0f);
+    if (item.curve == ReleaseCurve::curved)
+        shaped = 0.5f - 0.5f * std::cos(3.14159265f * shaped);
+    return item.gain + (1.0f - item.gain) * shaped;
 }
 
 std::size_t StreamingLeveler::process(const float* const* input,

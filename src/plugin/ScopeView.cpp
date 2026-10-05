@@ -13,21 +13,30 @@ void ScopeView::setFrame(const HitScope::Frame& next)
 void ScopeView::paint(juce::Graphics& graphics)
 {
     auto bounds = getLocalBounds();
-    graphics.setColour(juce::Colour(0xff050607));
-    graphics.fillRoundedRectangle(bounds.toFloat(), 8.0f);
-    graphics.setColour(juce::Colour(0xff1d3a24));
-    graphics.drawRoundedRectangle(bounds.toFloat().reduced(0.5f), 8.0f, 1.0f);
+    auto caption = bounds.removeFromBottom(18);
+    const auto gap = 14;
+    auto inputPanel = bounds.removeFromTop((bounds.getHeight() - gap) / 2);
+    bounds.removeFromTop(gap);
+    auto outputPanel = bounds;
 
-    auto plot = bounds.reduced(10, 8);
-    auto caption = plot.removeFromBottom(16);
-    const auto gap = 8;
-    auto inputLane = plot.removeFromTop((plot.getHeight() - gap) / 2);
-    plot.removeFromTop(gap);
-    auto outputLane = plot;
-
-    auto drawLane = [&](juce::Rectangle<int> lane, const HitScope::Column* columns, const char* name, juce::Colour colour)
+    const auto inputColour = juce::Colour(0xff6f8f7a);
+    const auto outputColour = juce::Colour(0xffffc233);
+    auto drawPanel = [&](juce::Rectangle<int> panel, juce::Colour accent, const char* title)
     {
-        auto label = lane.removeFromLeft(36);
+        graphics.setColour(juce::Colour(0xff050607));
+        graphics.fillRoundedRectangle(panel.toFloat(), 8.0f);
+        graphics.setColour(accent.withAlpha(0.55f));
+        graphics.drawRoundedRectangle(panel.toFloat().reduced(0.5f), 8.0f, 1.5f);
+        graphics.setColour(accent);
+        graphics.setFont(juce::FontOptions(12.0f, juce::Font::bold));
+        graphics.drawText(title, panel.reduced(12, 6).removeFromTop(16), juce::Justification::centredLeft);
+        return panel.reduced(10, 8).withTrimmedTop(14);
+    };
+    auto inputLane = drawPanel(inputPanel, inputColour, "INPUT");
+    auto outputLane = drawPanel(outputPanel, outputColour, "OUTPUT  ·  AFTER LEVELING");
+
+    auto drawLane = [&](juce::Rectangle<int> lane, const HitScope::Column* columns, juce::Colour colour)
+    {
         const auto top = static_cast<float>(lane.getY());
         const auto bottom = static_cast<float>(lane.getBottom());
         const auto mid = (top + bottom) * 0.5f;
@@ -51,10 +60,6 @@ void ScopeView::paint(juce::Graphics& graphics)
                                         static_cast<float>(lane.getRight()));
         }
 
-        graphics.setColour(colour.withAlpha(0.9f));
-        graphics.setFont(juce::FontOptions(11.0f, juce::Font::bold));
-        graphics.drawText(name, label, juce::Justification::centredRight);
-
         if (!hasFrame)
             return;
 
@@ -75,25 +80,25 @@ void ScopeView::paint(juce::Graphics& graphics)
         {
             const auto x = lane.getX()
                            + lane.getWidth() * frame.writeColumn / static_cast<int>(HitScope::columns);
-            graphics.setColour(juce::Colour(0xffd7ffe0).withAlpha(0.45f));
+            graphics.setColour(juce::Colour(0xfff4f7fb).withAlpha(0.4f));
             graphics.drawVerticalLine(x, top, bottom);
         }
     };
 
-    drawLane(inputLane, frame.input.data(), "IN", juce::Colour(0xff1f8a38));
-    drawLane(outputLane, frame.output.data(), "OUT", juce::Colour(0xff3eea4a));
+    drawLane(inputLane, frame.input.data(), inputColour);
+    drawLane(outputLane, frame.output.data(), outputColour);
 
     if (!hasFrame)
     {
         graphics.setColour(juce::Colour(0xff8fb89a));
         graphics.setFont(juce::FontOptions(13.0f));
         graphics.drawFittedText("Play to fill the last 2 bars",
-                                bounds.reduced(20),
+                                getLocalBounds().reduced(20),
                                 juce::Justification::centred,
                                 2);
     }
 
-    graphics.setColour(juce::Colour(0xffd7ffe0));
+    graphics.setColour(juce::Colour(0xffa7b0bd));
     graphics.setFont(juce::FontOptions(12.0f, juce::Font::bold));
     const auto captionText = frame.musical
                                  ? juce::String(HitScope::bars) + " BARS"

@@ -294,3 +294,41 @@ TEST_CASE("Application window outlasts the measurement horizon and then releases
     REQUIRE(onPlateau == Catch::Approx(expectedGain).margin(1.0e-4));
     REQUIRE(afterReturn == Catch::Approx(1.0f).margin(1.0e-4));
 }
+
+TEST_CASE("Release length and curve shape the return to unity")
+{
+    const auto fixture = beat::leveler::harness::makeSynthetic(48000, 1);
+    const auto sampleRate = fixture.audio.sampleRate;
+    const auto ms = [&](double milliseconds)
+    {
+        return static_cast<std::int64_t>(std::llround(milliseconds * 0.001 * sampleRate));
+    };
+    LevelerParameters linear { 1.0f, false, -12.0f, 1.0f, 24.0f, 24.0f, 40.0f, 40.0f,
+                               ReleaseCurve::linear };
+    auto curved = linear;
+    curved.releaseCurve = ReleaseCurve::curved;
+
+    const auto linearRender = renderLeveler(fixture.audio.channels, sampleRate, linear, { 64 });
+    const auto curvedRender = renderLeveler(fixture.audio.channels, sampleRate, curved, { 64 });
+    const auto varied = renderLeveler(fixture.audio.channels, sampleRate, curved, { 127, 1, 511 });
+    REQUIRE(curvedRender.output == varied.output);
+
+    const auto onset = linearRender.measurements.front().event.onsetSample;
+    StreamingLeveler reference;
+    reference.prepare(sampleRate, 1);
+    const auto latency = reference.latencySamples();
+    const auto measuredDb = 20.0f * std::log10(linearRender.measurements.front().weightedRms);
+    const auto plateau = std::pow(10.0f, std::clamp((linear.targetDbfs - measuredDb) * linear.strength,
+                                                     -linear.maxCutDb, linear.maxBoostDb) / 20.0f);
+    REQUIRE(std::abs(plateau - 1.0f) > 0.1f);
+
+    const auto at = [&](const LevelerRender& render, double fromMs)
+    {
+        return plateauRatio(fixture.audio.channels[0], render.output[0],
+                            onset + ms(fromMs), onset + ms(fromMs + 1.0), latency);
+    };
+    // Release spans onset+40 ms .. onset+80 ms. A quarter in, the knee has barely left the plateau.
+    REQUIRE(at(linearRender, 50.0) == Catch::Approx(1.0f + (plateau - 1.0f) * 0.75f).margin(0.03f * std::abs(plateau - 1.0f)));
+    REQUIRE(at(curvedRender, 50.0) == Catch::Approx(1.0f + (plateau - 1.0f) * 0.8536f).margin(0.03f * std::abs(plateau - 1.0f)));
+    REQUIRE(at(curvedRender, 70.0) == Catch::Approx(1.0f + (plateau - 1.0f) * 0.1464f).margin(0.03f * std::abs(plateau - 1.0f)));
+}

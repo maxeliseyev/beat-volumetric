@@ -11,6 +11,13 @@
 namespace beat::leveler
 {
 
+enum class ReleaseCurve
+{
+    linear,
+    // Raised-cosine knee: eases out of the plateau and into unity.
+    curved
+};
+
 struct LevelerParameters
 {
     float strength = 0.5f;
@@ -20,8 +27,11 @@ struct LevelerParameters
     float maxBoostDb = 6.0f;
     float maxCutDb = 12.0f;
     // How long the hit keeps its coefficient after the onset. This is the
-    // application window, not the meter's 30 ms measurement horizon.
-    float windowMs = 120.0f;
+    // hold plateau, not the meter's 30 ms measurement horizon.
+    float holdMs = 120.0f;
+    // Length of the return to unity after the hold, and its shape.
+    float releaseMs = 8.0f;
+    ReleaseCurve releaseCurve = ReleaseCurve::linear;
 };
 
 struct GainDecision
@@ -65,6 +75,7 @@ private:
         std::int64_t holdEnd = 0;
         std::int64_t end = 0;
         float gain = 1.0f;
+        ReleaseCurve curve = ReleaseCurve::linear;
         bool active = false;
     };
 
@@ -80,7 +91,6 @@ private:
     double rate = 48000.0;
     std::size_t latency = 0;
     std::size_t attackSamples = 0;
-    std::size_t releaseSamples = 0;
     std::int64_t processedSamples = 0;
     StreamingAnalyzer analyzer;
     DelayLine delayLine;

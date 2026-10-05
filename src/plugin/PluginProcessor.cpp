@@ -18,7 +18,9 @@ BeatVolumetricAudioProcessor::BeatVolumetricAudioProcessor()
     strengthParameter = parameters.getRawParameterValue("strength");
     targetModeParameter = parameters.getRawParameterValue("target_mode");
     targetDbfsParameter = parameters.getRawParameterValue("target_dbfs");
-    windowParameter = parameters.getRawParameterValue("window_ms");
+    holdParameter = parameters.getRawParameterValue("hold_ms");
+    releaseParameter = parameters.getRawParameterValue("release_ms");
+    releaseCurveParameter = parameters.getRawParameterValue("release_curve");
     mixParameter = parameters.getRawParameterValue("mix");
 }
 
@@ -52,14 +54,23 @@ juce::AudioProcessorValueTreeState::ParameterLayout BeatVolumetricAudioProcessor
             {
                 return juce::jlimit(-36.0f, -3.0f, text.getFloatValue());
             })));
-    result.push_back(std::make_unique<juce::AudioParameterFloat>("window_ms", "Window",
-        juce::NormalisableRange<float>(20.0f, 400.0f, 1.0f), 120.0f,
-        juce::AudioParameterFloatAttributes()
-            .withStringFromValueFunction([](float value, int) { return juce::String(juce::roundToInt(value)) + " ms"; })
-            .withValueFromStringFunction([](const juce::String& text)
-            {
-                return juce::jlimit(20.0f, 400.0f, text.getFloatValue());
-            })));
+    const auto milliseconds = [](float low, float high, float initial, const juce::String& id,
+                                 const juce::String& name)
+    {
+        return std::make_unique<juce::AudioParameterFloat>(id, name,
+            juce::NormalisableRange<float>(low, high, 1.0f), initial,
+            juce::AudioParameterFloatAttributes()
+                .withStringFromValueFunction([](float value, int) { return juce::String(juce::roundToInt(value)) + " ms"; })
+                .withValueFromStringFunction([low, high](const juce::String& text)
+                {
+                    return juce::jlimit(low, high, text.getFloatValue());
+                }));
+    };
+    // "window_ms" is retired: its ID is not reused. Hold and Release replace it.
+    result.push_back(milliseconds(20.0f, 400.0f, 120.0f, "hold_ms", "Hold"));
+    result.push_back(milliseconds(1.0f, 200.0f, 8.0f, "release_ms", "Release"));
+    result.push_back(std::make_unique<juce::AudioParameterChoice>("release_curve", "Release curve",
+        juce::StringArray { "Linear", "Curved" }, 0));
     result.push_back(std::make_unique<juce::AudioParameterFloat>("mix", "Dry/Wet",
         juce::NormalisableRange<float>(0.0f, 1.0f), 1.0f, percent));
     return { result.begin(), result.end() };
@@ -112,7 +123,11 @@ void BeatVolumetricAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         mixParameter != nullptr ? mixParameter->load(std::memory_order_relaxed) : 1.0f,
         6.0f,
         12.0f,
-        windowParameter != nullptr ? windowParameter->load(std::memory_order_relaxed) : 120.0f };
+        holdParameter != nullptr ? holdParameter->load(std::memory_order_relaxed) : 120.0f,
+        releaseParameter != nullptr ? releaseParameter->load(std::memory_order_relaxed) : 8.0f,
+        releaseCurveParameter != nullptr && releaseCurveParameter->load(std::memory_order_relaxed) > 0.5f
+            ? beat::leveler::ReleaseCurve::curved
+            : beat::leveler::ReleaseCurve::linear };
     events.fill({});
     const auto measurementsWritten = leveler.process(buffer.getArrayOfReadPointers(),
                                                       buffer.getArrayOfWritePointers(),

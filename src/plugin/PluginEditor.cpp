@@ -34,7 +34,7 @@ BeatVolumetricAudioProcessorEditor::BeatVolumetricAudioProcessorEditor(BeatVolum
     title.setFont(juce::FontOptions(24.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, juce::Colours::white);
     status.setColour(juce::Label::textColourId, juce::Colour(0xffa7b0bd));
-    for (auto* label : { &strengthLabel, &levelLabel, &targetLabel, &windowLabel, &mixLabel, &scopeLabel })
+    for (auto* label : { &strengthLabel, &levelLabel, &targetLabel, &holdLabel, &releaseLabel, &curveLabel, &mixLabel, &scopeLabel })
     {
         label->setFont(juce::FontOptions(12.0f, juce::Font::bold));
         label->setColour(juce::Label::textColourId, juce::Colour(0xffa7b0bd));
@@ -44,11 +44,17 @@ BeatVolumetricAudioProcessorEditor::BeatVolumetricAudioProcessorEditor(BeatVolum
     levelLabel.setText("LEVEL", juce::dontSendNotification);
     targetLabel.setText("TARGET", juce::dontSendNotification);
     targetLabel.setJustificationType(juce::Justification::centredLeft);
-    windowLabel.setText("WINDOW", juce::dontSendNotification);
-    windowLabel.setJustificationType(juce::Justification::centredLeft);
+    holdLabel.setText("HOLD", juce::dontSendNotification);
+    releaseLabel.setText("RELEASE", juce::dontSendNotification);
+    curveLabel.setText("CURVE", juce::dontSendNotification);
+    for (auto* label : { &holdLabel, &releaseLabel, &curveLabel })
+        label->setJustificationType(juce::Justification::centredLeft);
+    hold.setTooltip("How long each hit keeps its corrected level after the onset, in ms.");
+    release.setTooltip("How long the level takes to glide back to the original after Hold, in ms.");
+    releaseCurve.setTooltip("Linear returns at a steady rate. Curved eases out of Hold and into the original level.");
     mixLabel.setText("DRY / WET", juce::dontSendNotification);
     mixLabel.setJustificationType(juce::Justification::centredLeft);
-    scopeLabel.setText("SCOPE  ·  TOP IS INPUT, BOTTOM IS OUTPUT", juce::dontSendNotification);
+    scopeLabel.setText("LAST 2 BARS  ·  YELLOW IS WHAT THE PLUGIN CHANGED", juce::dontSendNotification);
     scopeLabel.setJustificationType(juce::Justification::centredLeft);
     for (auto* label : { &hits, &peak, &spread, &gain })
     {
@@ -64,7 +70,7 @@ BeatVolumetricAudioProcessorEditor::BeatVolumetricAudioProcessorEditor(BeatVolum
         slider->setTextBoxStyle(juce::Slider::TextBoxBelow, false, 76, 20);
         addAndMakeVisible(*slider);
     }
-    for (auto* slider : { &window, &mix })
+    for (auto* slider : { &hold, &release, &mix })
     {
         slider->setSliderStyle(juce::Slider::LinearHorizontal);
         slider->setTextBoxStyle(juce::Slider::TextBoxRight, false, 68, 20);
@@ -85,23 +91,29 @@ BeatVolumetricAudioProcessorEditor::BeatVolumetricAudioProcessorEditor(BeatVolum
     }
     strength.setNumDecimalPlacesToDisplay(0);
     targetLevel.setNumDecimalPlacesToDisplay(1);
-    window.setNumDecimalPlacesToDisplay(0);
+    hold.setNumDecimalPlacesToDisplay(0);
+    release.setNumDecimalPlacesToDisplay(0);
+    releaseCurve.addItem("Linear", 1);
+    releaseCurve.addItem("Curved", 2);
+    addAndMakeVisible(releaseCurve);
     mix.setNumDecimalPlacesToDisplay(0);
     addAndMakeVisible(targetMode);
     addAndMakeVisible(scope);
-    for (auto* label : { &title, &status, &strengthLabel, &levelLabel, &targetLabel, &windowLabel,
+    for (auto* label : { &title, &status, &strengthLabel, &levelLabel, &targetLabel, &holdLabel, &releaseLabel, &curveLabel,
                          &mixLabel, &scopeLabel, &hits, &peak, &spread, &gain })
         addAndMakeVisible(*label);
 
     auto& state = volumetricProcessor.state();
     strengthAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(state, "strength", strength);
     targetAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(state, "target_dbfs", targetLevel);
-    windowAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(state, "window_ms", window);
+    holdAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(state, "hold_ms", hold);
+    releaseAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(state, "release_ms", release);
+    curveAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(state, "release_curve", releaseCurve);
     mixAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(state, "mix", mix);
     targetModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(state, "target_mode", targetMode);
     targetMode.onChange = [this] { showManualTarget(targetMode.getSelectedId() == 2); };
     showManualTarget(targetMode.getSelectedId() == 2);
-    setSize(960, 580);
+    setSize(960, 640);
     startTimerHz(30);
 }
 
@@ -145,7 +157,7 @@ void BeatVolumetricAudioProcessorEditor::resized()
     scopeLabel.setBounds(area.removeFromTop(20));
     scope.setBounds(area);
 
-    auto faders = controls.removeFromTop(std::max(180, controls.getHeight() - 108));
+    auto faders = controls.removeFromTop(std::max(180, controls.getHeight() - 190));
     auto strengthColumn = faders.removeFromLeft(104);
     strengthLabel.setBounds(strengthColumn.removeFromTop(18));
     strength.setBounds(strengthColumn.reduced(6, 0));
@@ -167,7 +179,12 @@ void BeatVolumetricAudioProcessorEditor::resized()
         slider.setBounds(row);
         controls.removeFromTop(6);
     };
-    placeSlider(windowLabel, window);
+    placeSlider(holdLabel, hold);
+    placeSlider(releaseLabel, release);
+    auto curveRow = controls.removeFromTop(28);
+    curveLabel.setBounds(curveRow.removeFromLeft(72));
+    releaseCurve.setBounds(curveRow.reduced(0, 1));
+    controls.removeFromTop(6);
     placeSlider(mixLabel, mix);
 }
 
