@@ -5,7 +5,7 @@
 ## Branch
 
 `feat/hold-release-and-scope-lanes`, от `feat/application-window-and-hit-scope`
-(там же осциллограф из #9, которого ещё нет в `main`). VERSION 0.7.0.
+(там же осциллограф из #9, которого ещё нет в `main`). VERSION 0.8.0.
 
 ## Now
 
@@ -20,7 +20,8 @@
   вертикальные фейдеры. В Auto фейдер Level показывает цель (середину недавних
   ударов) и не двигается вручную. Hold задаёт, сколько удар держит коэффициент
   (120 мс, отдельно от 30 мс измерения); Release и Curve — возврат к единице
-  (8 мс, линейный или raised-cosine). Параметр `window_ms` снят. Прибор — два такта
+  (8 мс, линейный или raised-cosine). Параметр `window_ms` снят. Mode (`mode`): Both, Cut loud (только вниз) или Lift quiet
+  (только вверх); цель Auto не зависит от режима. Прибор — два такта
   без прокрутки в двух отдельных панелях: INPUT и жёлтый OUTPUT. Рядом число разброса.
 - Добавлен `scripts/package-macos.sh`: Developer ID signing, Hardened Runtime,
   notarization/stapling вложенных bundles и подписанный DMG; Makefile получил
@@ -34,6 +35,9 @@
 40 мс и 120 мс, Release 8 и 60 мс, Linear и Curved. Подавление транзиентов отдельным режимом не добавлять.
 
 ## Проверено
+
+- 0.8.0: `make CONFIG=debug test` — 2/2, включая тест Mode: Cut loud и Lift quiet
+  совпадают с Both, обрезанным по знаку. 0.7.0 в DAW прослушан, работает как задумано.
 
 - 0.7.0: `make CONFIG=debug test` — 2/2, включая тест формы Release (линейная и
   raised-cosine, независимость от блоков). Вид панелей и звук в DAW не проверены.

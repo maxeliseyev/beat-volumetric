@@ -111,9 +111,11 @@ void StreamingLeveler::schedule(const HitMeasurement& measurement,
     const auto target = parameters.automaticTarget ? automaticTarget() : parameters.targetDbfs;
     const auto strength = std::clamp(parameters.strength, 0.0f, 1.0f);
     const auto requestedDb = (target - measuredDb) * strength;
-    const auto limitedDb = std::clamp(requestedDb,
-                                      -std::max(0.0f, parameters.maxCutDb),
-                                      std::max(0.0f, parameters.maxBoostDb));
+    const auto maxCut = parameters.mode == LevelingMode::liftQuiet ? 0.0f
+                                                                   : std::max(0.0f, parameters.maxCutDb);
+    const auto maxBoost = parameters.mode == LevelingMode::cutLoud ? 0.0f
+                                                                    : std::max(0.0f, parameters.maxBoostDb);
+    const auto limitedDb = std::clamp(requestedDb, -maxCut, maxBoost);
     const auto slot = findScheduleSlot();
     const auto onset = measurement.event.onsetSample;
     const auto holdLength = static_cast<std::int64_t>(

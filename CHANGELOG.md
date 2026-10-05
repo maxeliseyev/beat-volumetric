@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0
+
+- Mode: Both, Cut loud (only hits above the target are turned down) or Lift quiet (only hits below it are turned up). New parameter ID `mode`.
+
 ## 0.7.0
 
 - Window is replaced by Hold (how long a hit keeps its corrected level) and Release (how long the level glides back to unity, 1-200 ms, default 8 ms). Release has a Linear or Curved (raised-cosine knee) shape. The `window_ms` parameter ID is retired, not reused; old sessions fall back to the defaults.

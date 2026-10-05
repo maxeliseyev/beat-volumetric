@@ -18,6 +18,15 @@ enum class ReleaseCurve
     curved
 };
 
+enum class LevelingMode
+{
+    both,
+    // Only hits above the target are turned down.
+    cutLoud,
+    // Only hits below the target are turned up.
+    liftQuiet
+};
+
 struct LevelerParameters
 {
     float strength = 0.5f;
@@ -32,6 +41,7 @@ struct LevelerParameters
     // Length of the return to unity after the hold, and its shape.
     float releaseMs = 8.0f;
     ReleaseCurve releaseCurve = ReleaseCurve::linear;
+    LevelingMode mode = LevelingMode::both;
 };
 
 struct GainDecision
