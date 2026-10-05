@@ -1,9 +1,7 @@
 #pragma once
 
-#include "GainHistory.h"
 #include "PluginProcessor.h"
-
-#include <vector>
+#include "ScopeView.h"
 
 class BeatVolumetricAudioProcessorEditor final : public juce::AudioProcessorEditor,
                                                   private juce::Timer
@@ -18,12 +16,11 @@ private:
     void showManualTarget(bool manual);
 
     BeatVolumetricAudioProcessor& volumetricProcessor;
-    juce::Label title, status, strengthLabel, levelLabel, targetLabel, windowLabel, mixLabel, historyLabel;
+    juce::Label title, status, strengthLabel, levelLabel, targetLabel, windowLabel, mixLabel, scopeLabel;
     juce::Label hits, peak, spread, gain;
     juce::Slider strength, targetLevel, autoLevel, window, mix;
     juce::ComboBox targetMode;
-    GainHistory history;
-    std::vector<GainHistory::Bar> historyBars;
+    ScopeView scope;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> strengthAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> targetAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> windowAttachment;

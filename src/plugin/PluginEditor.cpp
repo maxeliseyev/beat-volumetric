@@ -34,7 +34,7 @@ BeatVolumetricAudioProcessorEditor::BeatVolumetricAudioProcessorEditor(BeatVolum
     title.setFont(juce::FontOptions(24.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, juce::Colours::white);
     status.setColour(juce::Label::textColourId, juce::Colour(0xffa7b0bd));
-    for (auto* label : { &strengthLabel, &levelLabel, &targetLabel, &windowLabel, &mixLabel, &historyLabel })
+    for (auto* label : { &strengthLabel, &levelLabel, &targetLabel, &windowLabel, &mixLabel, &scopeLabel })
     {
         label->setFont(juce::FontOptions(12.0f, juce::Font::bold));
         label->setColour(juce::Label::textColourId, juce::Colour(0xffa7b0bd));
@@ -48,8 +48,8 @@ BeatVolumetricAudioProcessorEditor::BeatVolumetricAudioProcessorEditor(BeatVolum
     windowLabel.setJustificationType(juce::Justification::centredLeft);
     mixLabel.setText("DRY / WET", juce::dontSendNotification);
     mixLabel.setJustificationType(juce::Justification::centredLeft);
-    historyLabel.setText("GAIN CHANGE  ·  UP IS BOOST, DOWN IS CUT, BARS STAY", juce::dontSendNotification);
-    historyLabel.setJustificationType(juce::Justification::centredLeft);
+    scopeLabel.setText("SCOPE  ·  TOP IS INPUT, BOTTOM IS OUTPUT", juce::dontSendNotification);
+    scopeLabel.setJustificationType(juce::Justification::centredLeft);
     for (auto* label : { &hits, &peak, &spread, &gain })
     {
         label->setFont(juce::FontOptions(14.0f, juce::Font::bold));
@@ -88,9 +88,9 @@ BeatVolumetricAudioProcessorEditor::BeatVolumetricAudioProcessorEditor(BeatVolum
     window.setNumDecimalPlacesToDisplay(0);
     mix.setNumDecimalPlacesToDisplay(0);
     addAndMakeVisible(targetMode);
-    addAndMakeVisible(history);
+    addAndMakeVisible(scope);
     for (auto* label : { &title, &status, &strengthLabel, &levelLabel, &targetLabel, &windowLabel,
-                         &mixLabel, &historyLabel, &hits, &peak, &spread, &gain })
+                         &mixLabel, &scopeLabel, &hits, &peak, &spread, &gain })
         addAndMakeVisible(*label);
 
     auto& state = volumetricProcessor.state();
@@ -101,9 +101,8 @@ BeatVolumetricAudioProcessorEditor::BeatVolumetricAudioProcessorEditor(BeatVolum
     targetModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(state, "target_mode", targetMode);
     targetMode.onChange = [this] { showManualTarget(targetMode.getSelectedId() == 2); };
     showManualTarget(targetMode.getSelectedId() == 2);
-    historyBars.reserve(16);
-    setSize(760, 680);
-    startTimerHz(20);
+    setSize(960, 580);
+    startTimerHz(30);
 }
 
 void BeatVolumetricAudioProcessorEditor::showManualTarget(bool manual)
@@ -131,43 +130,45 @@ void BeatVolumetricAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds().reduced(28);
     title.setBounds(area.removeFromTop(32));
-    status.setBounds(area.removeFromTop(36));
+    status.setBounds(area.removeFromTop(28));
     area.removeFromTop(6);
 
-    auto controls = area.removeFromTop(250);
-    auto strengthColumn = controls.removeFromLeft(96);
-    strengthLabel.setBounds(strengthColumn.removeFromTop(18));
-    strength.setBounds(strengthColumn.reduced(4, 0));
-    controls.removeFromLeft(8);
-    auto levelColumn = controls.removeFromLeft(96);
-    levelLabel.setBounds(levelColumn.removeFromTop(18));
-    targetLevel.setBounds(levelColumn.reduced(4, 0));
-    autoLevel.setBounds(levelColumn.reduced(4, 0));
+    auto telemetry = area.removeFromBottom(32);
+    hits.setBounds(telemetry.removeFromLeft(120));
+    peak.setBounds(telemetry.removeFromLeft(170));
+    gain.setBounds(telemetry.removeFromRight(140));
+    spread.setBounds(telemetry);
+    area.removeFromBottom(8);
 
-    controls.removeFromLeft(24);
+    auto controls = area.removeFromLeft(220);
+    area.removeFromLeft(16);
+    scopeLabel.setBounds(area.removeFromTop(20));
+    scope.setBounds(area);
+
+    auto faders = controls.removeFromTop(std::max(180, controls.getHeight() - 108));
+    auto strengthColumn = faders.removeFromLeft(104);
+    strengthLabel.setBounds(strengthColumn.removeFromTop(18));
+    strength.setBounds(strengthColumn.reduced(6, 0));
+    auto levelColumn = faders;
+    levelLabel.setBounds(levelColumn.removeFromTop(18));
+    targetLevel.setBounds(levelColumn.reduced(6, 0));
+    autoLevel.setBounds(levelColumn.reduced(6, 0));
+
+    controls.removeFromTop(8);
     auto mode = controls.removeFromTop(28);
-    targetLabel.setBounds(mode.removeFromLeft(72));
-    targetMode.setBounds(mode.removeFromLeft(160).reduced(0, 1));
-    controls.removeFromTop(28);
+    targetLabel.setBounds(mode.removeFromLeft(64));
+    targetMode.setBounds(mode.reduced(0, 1));
+    controls.removeFromTop(8);
 
     auto placeSlider = [&](juce::Label& label, juce::Slider& slider)
     {
         auto row = controls.removeFromTop(28);
-        label.setBounds(row.removeFromLeft(84));
+        label.setBounds(row.removeFromLeft(72));
         slider.setBounds(row);
-        controls.removeFromTop(10);
+        controls.removeFromTop(6);
     };
     placeSlider(windowLabel, window);
     placeSlider(mixLabel, mix);
-
-    auto telemetry = area.removeFromBottom(36);
-    hits.setBounds(telemetry.removeFromLeft(120));
-    peak.setBounds(telemetry.removeFromLeft(160));
-    gain.setBounds(telemetry.removeFromRight(130));
-    spread.setBounds(telemetry);
-
-    historyLabel.setBounds(area.removeFromTop(22));
-    history.setBounds(area.reduced(0, 2));
 }
 
 void BeatVolumetricAudioProcessorEditor::timerCallback()
@@ -182,14 +183,14 @@ void BeatVolumetricAudioProcessorEditor::timerCallback()
 
     std::array<float, 16> before {};
     std::array<float, 16> after {};
-    historyBars.clear();
     for (std::size_t index = 0; index < markCount; ++index)
     {
         before[index] = marks[index].measuredDb;
         after[index] = marks[index].measuredDb + marks[index].gainDb;
-        historyBars.push_back({ marks[index].gainDb });
     }
-    history.setBars(historyBars.data(), historyBars.size());
+    HitScope::Frame frame;
+    if (volumetricProcessor.copyScope(frame))
+        scope.setFrame(frame);
 
     if (!targetLevel.isVisible())
     {
