@@ -294,3 +294,89 @@ TEST_CASE("Application window outlasts the measurement horizon and then releases
     REQUIRE(onPlateau == Catch::Approx(expectedGain).margin(1.0e-4));
     REQUIRE(afterReturn == Catch::Approx(1.0f).margin(1.0e-4));
 }
+
+TEST_CASE("Release length and curve shape the return to unity")
+{
+    const auto fixture = beat::leveler::harness::makeSynthetic(48000, 1);
+    const auto sampleRate = fixture.audio.sampleRate;
+    const auto ms = [&](double milliseconds)
+    {
+        return static_cast<std::int64_t>(std::llround(milliseconds * 0.001 * sampleRate));
+    };
+    LevelerParameters linear { 1.0f, false, -12.0f, 1.0f, 24.0f, 24.0f, 40.0f, 40.0f,
+                               ReleaseCurve::linear };
+    auto curved = linear;
+    curved.releaseCurve = ReleaseCurve::curved;
+
+    const auto linearRender = renderLeveler(fixture.audio.channels, sampleRate, linear, { 64 });
+    const auto curvedRender = renderLeveler(fixture.audio.channels, sampleRate, curved, { 64 });
+    const auto varied = renderLeveler(fixture.audio.channels, sampleRate, curved, { 127, 1, 511 });
+    REQUIRE(curvedRender.output == varied.output);
+
+    const auto onset = linearRender.measurements.front().event.onsetSample;
+    StreamingLeveler reference;
+    reference.prepare(sampleRate, 1);
+    const auto latency = reference.latencySamples();
+    const auto measuredDb = 20.0f * std::log10(linearRender.measurements.front().weightedRms);
+    const auto plateau = std::pow(10.0f, std::clamp((linear.targetDbfs - measuredDb) * linear.strength,
+                                                     -linear.maxCutDb, linear.maxBoostDb) / 20.0f);
+    REQUIRE(std::abs(plateau - 1.0f) > 0.1f);
+
+    const auto at = [&](const LevelerRender& render, double fromMs)
+    {
+        return plateauRatio(fixture.audio.channels[0], render.output[0],
+                            onset + ms(fromMs), onset + ms(fromMs + 1.0), latency);
+    };
+    // Release spans onset+40 ms .. onset+80 ms. A quarter in, the knee has barely left the plateau.
+    REQUIRE(at(linearRender, 50.0) == Catch::Approx(1.0f + (plateau - 1.0f) * 0.75f).margin(0.03f * std::abs(plateau - 1.0f)));
+    REQUIRE(at(curvedRender, 50.0) == Catch::Approx(1.0f + (plateau - 1.0f) * 0.8536f).margin(0.03f * std::abs(plateau - 1.0f)));
+    REQUIRE(at(curvedRender, 70.0) == Catch::Approx(1.0f + (plateau - 1.0f) * 0.1464f).margin(0.03f * std::abs(plateau - 1.0f)));
+}
+
+TEST_CASE("Leveling mode restricts the direction of the gain")
+{
+    const auto fixture = beat::leveler::harness::makeSynthetic(48000, 1);
+    std::vector<float> measured;
+    const auto render = [&](LevelingMode mode, float target)
+    {
+        LevelerParameters parameters { 1.0f, false, target, 1.0f, 24.0f, 24.0f };
+        parameters.mode = mode;
+        StreamingLeveler leveler;
+        leveler.prepare(fixture.audio.sampleRate, 1);
+        std::vector<float> output(fixture.audio.channels[0].size());
+        std::array<OnsetEvent, 32> events {};
+        std::array<HitMeasurement, 32> measurements {};
+        std::vector<float> gains;
+        const float* source[] { fixture.audio.channels[0].data() };
+        for (std::size_t offset = 0; offset < output.size(); offset += 256)
+        {
+            const auto count = std::min<std::size_t>(256, output.size() - offset);
+            const float* in[] { source[0] + offset };
+            float* out[] { output.data() + offset };
+            leveler.process(in, out, count, parameters, events, measurements);
+            for (const auto& decision : leveler.decisions())
+            {
+                gains.push_back(decision.gainDb);
+                measured.push_back(decision.measuredDb);
+            }
+            events.fill({});
+        }
+        return gains;
+    };
+    render(LevelingMode::both, -12.0f);
+    std::sort(measured.begin(), measured.end());
+    // Aim at the middle of the measured hits so some are louder and some quieter.
+    const auto target = measured[measured.size() / 2];
+    const auto both = render(LevelingMode::both, target);
+    const auto cut = render(LevelingMode::cutLoud, target);
+    const auto lift = render(LevelingMode::liftQuiet, target);
+    REQUIRE(both.size() == cut.size());
+    REQUIRE(both.size() == lift.size());
+    REQUIRE(std::any_of(both.begin(), both.end(), [](float gain) { return gain > 0.1f; }));
+    REQUIRE(std::any_of(both.begin(), both.end(), [](float gain) { return gain < -0.1f; }));
+    for (std::size_t index = 0; index < both.size(); ++index)
+    {
+        REQUIRE(cut[index] == Catch::Approx(std::min(both[index], 0.0f)).margin(1.0e-6));
+        REQUIRE(lift[index] == Catch::Approx(std::max(both[index], 0.0f)).margin(1.0e-6));
+    }
+}
