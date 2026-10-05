@@ -16,10 +16,10 @@ private:
     void showManualTarget(bool manual);
 
     BeatVolumetricAudioProcessor& volumetricProcessor;
-    juce::Label title, status, strengthLabel, levelLabel, targetLabel, modeLabel, holdLabel, releaseLabel, curveLabel, mixLabel, scopeLabel;
+    juce::Label title, status, strengthLabel, levelLabel, targetLabel, modeLabel, sourceLabel, holdLabel, releaseLabel, curveLabel, mixLabel, scopeLabel;
     juce::Label hits, peak, spread, gain;
     juce::Slider strength, targetLevel, autoLevel, hold, release, mix;
-    juce::ComboBox targetMode, releaseCurve, levelingMode;
+    juce::ComboBox targetMode, releaseCurve, levelingMode, detectSource;
     juce::TooltipWindow tooltips { this };
     ScopeView scope;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> strengthAttachment;
@@ -28,6 +28,7 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> releaseAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> curveAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> sourceAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> mixAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> targetModeAttachment;
 };

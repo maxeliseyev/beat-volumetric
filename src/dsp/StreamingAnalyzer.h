@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DetectionSource.h"
 #include "HitLevelMeter.h"
 #include "PassthroughProcessor.h"
 #include "StreamingDetector.h"
@@ -15,7 +16,8 @@ public:
     void prepare(double sampleRate, std::size_t numChannels);
     void reset(std::uint64_t epoch = 0) noexcept;
     std::size_t process(const float* const* input, float* const* output, std::size_t numSamples,
-                        std::span<OnsetEvent> events, std::span<HitMeasurement> measurements) noexcept;
+                        std::span<OnsetEvent> events, std::span<HitMeasurement> measurements,
+                        DetectionSource source = DetectionSource::stereo) noexcept;
 
 private:
     std::size_t channels = 0;

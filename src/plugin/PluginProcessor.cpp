@@ -22,6 +22,7 @@ BeatVolumetricAudioProcessor::BeatVolumetricAudioProcessor()
     releaseParameter = parameters.getRawParameterValue("release_ms");
     releaseCurveParameter = parameters.getRawParameterValue("release_curve");
     modeParameter = parameters.getRawParameterValue("mode");
+    sourceParameter = parameters.getRawParameterValue("detect_source");
     mixParameter = parameters.getRawParameterValue("mix");
 }
 
@@ -74,6 +75,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout BeatVolumetricAudioProcessor
         juce::StringArray { "Linear", "Curved" }, 0));
     result.push_back(std::make_unique<juce::AudioParameterChoice>("mode", "Mode",
         juce::StringArray { "Both", "Cut loud", "Lift quiet" }, 0));
+    result.push_back(std::make_unique<juce::AudioParameterChoice>("detect_source", "Detect from",
+        juce::StringArray { "Stereo", "Mid", "Peak" }, 0));
     result.push_back(std::make_unique<juce::AudioParameterFloat>("mix", "Dry/Wet",
         juce::NormalisableRange<float>(0.0f, 1.0f), 1.0f, percent));
     return { result.begin(), result.end() };
@@ -114,6 +117,13 @@ beat::leveler::LevelingMode modeFor(float choice) noexcept
     return choice > 0.5f ? beat::leveler::LevelingMode::cutLoud : beat::leveler::LevelingMode::both;
 }
 
+beat::leveler::DetectionSource sourceFor(float choice) noexcept
+{
+    if (choice > 1.5f)
+        return beat::leveler::DetectionSource::peak;
+    return choice > 0.5f ? beat::leveler::DetectionSource::mid : beat::leveler::DetectionSource::stereo;
+}
+
 } // namespace
 
 void BeatVolumetricAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -143,7 +153,8 @@ void BeatVolumetricAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         releaseCurveParameter != nullptr && releaseCurveParameter->load(std::memory_order_relaxed) > 0.5f
             ? beat::leveler::ReleaseCurve::curved
             : beat::leveler::ReleaseCurve::linear,
-        modeFor(modeParameter != nullptr ? modeParameter->load(std::memory_order_relaxed) : 0.0f) };
+        modeFor(modeParameter != nullptr ? modeParameter->load(std::memory_order_relaxed) : 0.0f),
+        sourceFor(sourceParameter != nullptr ? sourceParameter->load(std::memory_order_relaxed) : 0.0f) };
     events.fill({});
     const auto measurementsWritten = leveler.process(buffer.getArrayOfReadPointers(),
                                                       buffer.getArrayOfWritePointers(),

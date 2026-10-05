@@ -380,3 +380,28 @@ TEST_CASE("Leveling mode restricts the direction of the gain")
         REQUIRE(lift[index] == Catch::Approx(std::max(both[index], 0.0f)).margin(1.0e-6));
     }
 }
+
+TEST_CASE("Detection source decides which stereo hits are heard")
+{
+    const auto fixture = beat::leveler::harness::makeSynthetic(48000, 1);
+    const auto& mono = fixture.audio.channels[0];
+    std::vector<std::vector<float>> centre { mono, mono };
+    std::vector<std::vector<float>> side { mono, mono };
+    for (auto& sample : side[1])
+        sample = -sample;
+
+    const auto count = [&](const std::vector<std::vector<float>>& input, DetectionSource source)
+    {
+        LevelerParameters parameters { 1.0f, false, -12.0f, 1.0f, 24.0f, 24.0f };
+        parameters.source = source;
+        return renderLeveler(input, fixture.audio.sampleRate, parameters, { 64 }).measurements.size();
+    };
+    const auto expected = fixture.hits.size();
+
+    for (const auto source : { DetectionSource::stereo, DetectionSource::mid, DetectionSource::peak })
+        REQUIRE(count(centre, source) == expected);
+    // A purely out-of-phase hit survives Stereo and Peak but cancels in Mid.
+    REQUIRE(count(side, DetectionSource::stereo) == expected);
+    REQUIRE(count(side, DetectionSource::peak) == expected);
+    REQUIRE(count(side, DetectionSource::mid) == 0);
+}
