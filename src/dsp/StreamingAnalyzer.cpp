@@ -29,12 +29,13 @@ void StreamingAnalyzer::reset(std::uint64_t epoch) noexcept
 
 std::size_t StreamingAnalyzer::process(const float* const* input, float* const* output, std::size_t numSamples,
                                        std::span<OnsetEvent> events,
-                                       std::span<HitMeasurement> measurements) noexcept
+                                       std::span<HitMeasurement> measurements,
+                                       DetectionSource source) noexcept
 {
     assert(channels > 0);
     passthrough.process(input, output, channels, numSamples);
-    const auto eventCount = detector.process(input, channels, numSamples, events);
-    return meter.process(input, channels, numSamples, events.first(eventCount), measurements);
+    const auto eventCount = detector.process(input, channels, numSamples, events, source);
+    return meter.process(input, channels, numSamples, events.first(eventCount), measurements, source);
 }
 
 } // namespace beat::leveler

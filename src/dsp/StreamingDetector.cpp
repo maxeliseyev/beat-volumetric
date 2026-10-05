@@ -82,20 +82,17 @@ void StreamingDetector::reset(std::uint64_t newEpoch) noexcept
 std::size_t StreamingDetector::process(const float* const* input,
                                        std::size_t numChannels,
                                        std::size_t numSamples,
-                                       std::span<OnsetEvent> events) noexcept
+                                       std::span<OnsetEvent> events,
+                                       DetectionSource source) noexcept
 {
     assert(numChannels == 1 || numChannels == 2);
     assert(numSamples == 0 || input != nullptr);
     std::size_t eventCount = 0;
     for (std::size_t sample = 0; sample < numSamples; ++sample)
     {
-        double energy = 0.0;
-        for (std::size_t channel = 0; channel < numChannels; ++channel)
-        {
-            const auto value = static_cast<double>(input[channel][sample]);
-            energy += value * value;
-        }
-        inputRing[write] = static_cast<float>(std::sqrt(energy / static_cast<double>(numChannels)));
+        const auto second = numChannels > 1 ? static_cast<double>(input[1][sample]) : 0.0;
+        inputRing[write] = static_cast<float>(
+            combineChannels(source, numChannels, static_cast<double>(input[0][sample]), second));
         write = (write + 1) % window;
         filled = std::min(window, filled + 1);
         ++samplesSinceFrame;

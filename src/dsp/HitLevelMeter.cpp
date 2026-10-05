@@ -1,5 +1,6 @@
 #include "HitLevelMeter.h"
 
+#include <array>
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -74,26 +75,26 @@ std::size_t HitLevelMeter::process(const float* const* input,
                                    std::size_t numChannels,
                                    std::size_t numSamples,
                                    std::span<const OnsetEvent> newEvents,
-                                   std::span<HitMeasurement> measurements) noexcept
+                                   std::span<HitMeasurement> measurements,
+                                   DetectionSource source) noexcept
 {
     assert(numChannels == 1 || numChannels == 2);
     assert(numSamples == 0 || input != nullptr);
     for (std::size_t sample = 0; sample < numSamples; ++sample)
     {
-        double energy = 0.0;
-        double weightedEnergy = 0.0;
+        std::array<double, 2> raw {};
+        std::array<double, 2> filtered {};
         for (std::size_t channel = 0; channel < numChannels; ++channel)
         {
-            const auto value = static_cast<double>(input[channel][sample]);
-            energy += value * value;
+            raw[channel] = static_cast<double>(input[channel][sample]);
             const auto weighted = input[channel][sample] - highPassInput[channel]
                                   + highPassCoefficient * highPassOutput[channel];
             highPassInput[channel] = input[channel][sample];
             highPassOutput[channel] = weighted;
-            weightedEnergy += static_cast<double>(weighted) * weighted;
+            filtered[channel] = static_cast<double>(weighted);
         }
-        const auto amplitude = static_cast<float>(std::sqrt(energy / static_cast<double>(numChannels)));
-        const auto weighted = static_cast<float>(std::sqrt(weightedEnergy / static_cast<double>(numChannels)));
+        const auto amplitude = static_cast<float>(combineChannels(source, numChannels, raw[0], raw[1]));
+        const auto weighted = static_cast<float>(combineChannels(source, numChannels, filtered[0], filtered[1]));
         amplitudeHistory[write] = amplitude;
         weightedHistory[write] = weighted;
         write = (write + 1) % amplitudeHistory.size();

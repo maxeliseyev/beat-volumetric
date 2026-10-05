@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DetectionSource.h"
 #include "Event.h"
 
 #include <array>
@@ -40,7 +41,8 @@ public:
                         std::size_t numChannels,
                         std::size_t numSamples,
                         std::span<const OnsetEvent> newEvents,
-                        std::span<HitMeasurement> measurements) noexcept;
+                        std::span<HitMeasurement> measurements,
+                        DetectionSource source = DetectionSource::stereo) noexcept;
 
     std::size_t windowSamples() const noexcept { return window; }
     std::uint64_t droppedEvents() const noexcept { return dropped; }

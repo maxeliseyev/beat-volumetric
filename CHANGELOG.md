@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.0
+
+- Detect from: Stereo (default, as before), Mid or Peak. It chooses what hits are detected and measured on. The gain is still one scalar on both channels. New parameter ID `detect_source`.
+
 ## 0.8.0
 
 - Mode: Both, Cut loud (only hits above the target are turned down) or Lift quiet (only hits below it are turned up). New parameter ID `mode`.

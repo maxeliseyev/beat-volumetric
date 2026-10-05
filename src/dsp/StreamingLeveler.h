@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DelayLine.h"
+#include "DetectionSource.h"
 #include "StreamingAnalyzer.h"
 
 #include <array>
@@ -42,6 +43,7 @@ struct LevelerParameters
     float releaseMs = 8.0f;
     ReleaseCurve releaseCurve = ReleaseCurve::linear;
     LevelingMode mode = LevelingMode::both;
+    DetectionSource source = DetectionSource::stereo;
 };
 
 struct GainDecision

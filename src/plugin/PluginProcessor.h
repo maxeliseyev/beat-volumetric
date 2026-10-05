@@ -72,6 +72,7 @@ private:
     std::atomic<float>* releaseParameter = nullptr;
     std::atomic<float>* releaseCurveParameter = nullptr;
     std::atomic<float>* modeParameter = nullptr;
+    std::atomic<float>* sourceParameter = nullptr;
     std::atomic<float>* mixParameter = nullptr;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BeatVolumetricAudioProcessor)
 };

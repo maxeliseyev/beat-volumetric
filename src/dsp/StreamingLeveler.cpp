@@ -195,7 +195,7 @@ std::size_t StreamingLeveler::process(const float* const* input,
     assert(channels == 1 || channels == 2);
     assert(input != nullptr && output != nullptr);
     gainDecisionCount = 0;
-    const auto measurementsWritten = analyzer.process(input, output, numSamples, events, measurements);
+    const auto measurementsWritten = analyzer.process(input, output, numSamples, events, measurements, parameters.source);
     for (std::size_t index = 0; index < measurementsWritten; ++index)
     {
         const auto& event = measurements[index].event;

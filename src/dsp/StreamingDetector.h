@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DetectionSource.h"
 #include "Event.h"
 
 #include <cstddef>
@@ -35,7 +36,8 @@ public:
     std::size_t process(const float* const* input,
                         std::size_t numChannels,
                         std::size_t numSamples,
-                        std::span<OnsetEvent> events) noexcept;
+                        std::span<OnsetEvent> events,
+                        DetectionSource source = DetectionSource::stereo) noexcept;
 
     std::size_t windowSamples() const noexcept { return window; }
     std::size_t hopSamples() const noexcept { return hop; }
