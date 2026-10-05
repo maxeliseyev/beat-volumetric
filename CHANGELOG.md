@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.0
+
+- The meter is a scroll-locked oscilloscope. The top lane is the input and the bottom lane is the output, shaded across two bars when the host reports tempo.
+
 ## 0.5.0
 
 - Strength and Level are vertical faders. In Auto the Level fader shows the followed target and does not move by hand.

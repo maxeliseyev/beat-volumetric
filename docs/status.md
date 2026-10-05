@@ -5,11 +5,11 @@
 ## Branch
 
 `feat/faders-and-gain-history`, от `feat/application-window-and-hit-scope`
-(`5b212b4`, PR #6). VERSION 0.5.0.
+(`5b212b4`, PR #6). VERSION 0.6.0.
 
 ## Now
 
-- C++20/CMake Debug/Release, Makefile, VERSION 0.5.0 и changelog.
+- C++20/CMake Debug/Release, Makefile, VERSION 0.6.0 и changelog.
 - Автономный `beat_leveler_dsp`: потоковые spectral-flux detector, level meter и
   `StreamingLeveler` для mono/stereo с общей 56 ms lookahead latency.
 - Синтетические удары с эталонными onset/peak; WAV runner и CSV измеренного выхода.
@@ -19,19 +19,18 @@
 - Development AU/VST3/Standalone подключены к DSP через JUCE. Strength и Level —
   вертикальные фейдеры. В Auto фейдер Level показывает цель (середину недавних
   ударов) и не двигается вручную. Window задаёт, сколько удар держит коэффициент
-  (по умолчанию 120 мс, отдельно от 30 мс измерения). Прибор — удержанная история
-  изменения усиления по ударам, не бегущая волна входа. Рядом число разброса.
+  (по умолчанию 120 мс, отдельно от 30 мс измерения). Прибор — два такта
+  осциллографа без прокрутки: сверху вход, снизу выход. Рядом число разброса.
 - Добавлен `scripts/package-macos.sh`: Developer ID signing, Hardened Runtime,
   notarization/stapling вложенных bundles и подписанный DMG; Makefile получил
   `app` и `release-dmg`.
 
 ## Next
 
-На той же записи открыть `dist/Beat Volumetric 0.5.0.dmg` и проверить Auto:
-фейдер Level сам встаёт на цель, строка называет её в dB, столбики gain change
-остаются на экране. Нулевые столбики значат, что удары уже на этой середине.
-Затем Strength 50% и 100%, Window 40 мс и 120 мс. Подавление транзиентов
-отдельным режимом не добавлять.
+На той же записи открыть `dist/Beat Volumetric 0.6.0.dmg` и проверить
+осциллограф: два такта, сверху вход, снизу выход, волна не бежит лентой.
+В Auto фейдер Level сам встаёт на цель. Затем Strength 50% и 100%, Window
+40 мс и 120 мс. Подавление транзиентов отдельным режимом не добавлять.
 
 ## Проверено
 
@@ -51,6 +50,11 @@
   Stapler и Gatekeeper: `source=Notarized Developer ID` для app и DMG.
   Файл `dist/Beat Volumetric 0.5.0.dmg` (9.3 MB). В бандле CFBundleShortVersionString
   0.5.0. В DAW эта сборка ещё не слушалась.
+- `rtk proxy make release-dmg` для 0.6.0: осциллограф на два такта. Notary принял
+  архив бандлов `e7d46da0-73e0-4395-949d-3209434d7a4e` и DMG
+  `58fe452a-0b3d-4527-af15-4a43d5ef3043`. Stapler и Gatekeeper:
+  `source=Notarized Developer ID`. Файл `dist/Beat Volumetric 0.6.0.dmg` (9.3 MB).
+  В DAW эта сборка ещё не слушалась.
 
 - macOS, AppleClang 21.0.0, CMake 4.1.2, Ninja 1.13.1.
 - `rtk proxy make debug`: DSP/Catch2 и интеграционный CLI — 2/2 CTest-прогона.
@@ -94,10 +98,9 @@
 
 ## Resume
 
-1. Инженеру отдать `dist/Beat Volumetric 0.5.0.dmg`, не 0.4.0. На той же
-   drum-записи в Auto фейдер Level сам встаёт на цель, строка называет её в dB,
-   столбики gain change остаются. Нулевой столбик значит, что удар уже на этой
-   середине. Сравнить Strength 50% и 100%.
+1. Инженеру отдать `dist/Beat Volumetric 0.6.0.dmg`, не 0.5.0. Осциллограф
+   показывает два такта: сверху вход, снизу выход, без бегущей ленты. В Auto
+   фейдер Level сам встаёт на цель. Сравнить Strength 50% и 100%.
 2. Получить Developer ID Application, Team ID и app-specific password; сохранить
    credentials профилем `beat-volumetric`, затем проверить `make app` и
    `make release-dmg` на отдельном Mac.

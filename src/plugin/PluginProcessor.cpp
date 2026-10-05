@@ -2,6 +2,7 @@
 #include "PluginEditor.h"
 
 #include <cmath>
+#include <cstddef>
 
 namespace
 {
@@ -69,6 +70,8 @@ void BeatVolumetricAudioProcessor::prepareToPlay(double sampleRate, int)
     leveler.prepare(sampleRate, static_cast<std::size_t>(getTotalNumInputChannels()));
     leveler.reset();
     hitTelemetry.clear();
+    hitScope.prepare(sampleRate, leveler.latencySamples());
+    inputCounter = 0;
     setLatencySamples(static_cast<int>(leveler.latencySamples()));
 }
 
@@ -76,6 +79,8 @@ void BeatVolumetricAudioProcessor::releaseResources()
 {
     leveler.reset();
     hitTelemetry.clear();
+    hitScope.reset();
+    inputCounter = 0;
 }
 
 bool BeatVolumetricAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
@@ -91,6 +96,15 @@ void BeatVolumetricAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     juce::ScopedNoDenormals noDenormals;
     for (int channel = getTotalNumInputChannels(); channel < getTotalNumOutputChannels(); ++channel)
         buffer.clear(channel, 0, buffer.getNumSamples());
+    const auto sampleCount = buffer.getNumSamples();
+    const auto inputChannels = getTotalNumInputChannels();
+    if (inputChannels > 0 && sampleCount > 0)
+    {
+        hitScope.noteDry(buffer.getReadPointer(0),
+                         inputChannels > 1 ? buffer.getReadPointer(1) : nullptr,
+                         static_cast<std::size_t>(sampleCount),
+                         inputCounter);
+    }
     const beat::leveler::LevelerParameters levelerParameters {
         strengthParameter != nullptr ? strengthParameter->load(std::memory_order_relaxed) : 0.5f,
         targetModeParameter == nullptr || targetModeParameter->load(std::memory_order_relaxed) < 0.5f,
@@ -117,6 +131,35 @@ void BeatVolumetricAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         lastPeak.store(db(measurements[index].peak), std::memory_order_relaxed);
     for (const auto& decision : leveler.decisions())
         hitTelemetry.push(decision.onsetSample, decision.measuredDb, decision.gainDb, decision.targetDb);
+    if (inputChannels > 0 && sampleCount > 0)
+    {
+        HitScope::Clock clock;
+        if (auto* playHead = getPlayHead())
+        {
+            if (const auto position = playHead->getPosition(); position.hasValue())
+            {
+                const auto bpm = position->getBpm();
+                const auto ppq = position->getPpqPosition();
+                if (bpm.hasValue() && ppq.hasValue() && *bpm > 1.0)
+                {
+                    clock.musical = true;
+                    clock.playing = position->getIsPlaying();
+                    clock.bpm = *bpm;
+                    clock.ppq = *ppq;
+                    if (const auto signature = position->getTimeSignature();
+                        signature.hasValue() && signature->denominator > 0)
+                        clock.quartersPerBar = static_cast<double>(signature->numerator) * 4.0
+                                               / static_cast<double>(signature->denominator);
+                }
+            }
+        }
+        hitScope.noteWet(buffer.getReadPointer(0),
+                         inputChannels > 1 ? buffer.getReadPointer(1) : nullptr,
+                         static_cast<std::size_t>(sampleCount),
+                         inputCounter,
+                         clock);
+        inputCounter += sampleCount;
+    }
     gain.store(leveler.lastGainDb(), std::memory_order_relaxed);
     events.fill({});
 }

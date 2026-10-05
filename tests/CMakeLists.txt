@@ -1,4 +1,5 @@
-add_executable(beat_leveler_tests test_harness.cpp test_streaming_contract.cpp)
+add_executable(beat_leveler_tests test_harness.cpp test_streaming_contract.cpp test_hit_scope.cpp)
+target_include_directories(beat_leveler_tests PRIVATE "${PROJECT_SOURCE_DIR}/src/plugin")
 target_link_libraries(beat_leveler_tests PRIVATE beat_leveler_harness
     Catch2::Catch2WithMain beat_leveler_warnings)
 add_test(NAME beat_leveler_tests COMMAND beat_leveler_tests)
